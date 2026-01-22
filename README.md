@@ -44,6 +44,16 @@ sudo apt-get -y install cuda-toolkit-12-1
 
 ### install gcc-11
 sudo apt install gcc-11 g++-11
+### update ./bashrc so nvcc is loaded
+
+e.g with
+
+export PATH=/usr/local/cuda-12.1/bin:$PATH
+
+export LD_LIBRARY_PATH=/usr/local/cuda-12.1/lib64:$LD_LIBRARY_PATH
+
+
+
 ### Installation part 2.
 please note that two different .sh scripts are provided for installation. install.sh and install_CUDA_ARCH_7_5.sh depending on the GPU you have acess to
 Simply run [`install.sh`](install.sh) to install all dependencies in a new conda environment 
