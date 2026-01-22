@@ -24,10 +24,15 @@ In order for the installation to work you need cuda 12.1 and gcc-11
 If there are problems with instaling cuda 12.1 , make sure to purge cuda from the system
 ### purge cuda and nvidia driver (only if needed ) 
 sudo apt-get --purge remove 'cuda*'
+
 sudo apt-get --purge remove 'libcublas*' 'libnccl*' 'libnpp*' 'libcufft*' 'libcurand*' 'libcusolver*' 'libcusparse*'
+
 sudo apt-get autoremove
+
 sudo apt-get autoclean
+
 sudo rm -rf /usr/local/cuda*
+
 ### install nvidia driver (only if needed)
 
 ### install cuda 12.1 
