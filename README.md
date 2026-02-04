@@ -147,7 +147,7 @@ with to mitigate GPU memory use, based on when the error occurs.
 
 
 ## Citing 
-When using the code of the [superpoint_transformer](https://github.com/drprojects/superpoint_transformer) you should cite the orignal work
+When using the code of the [superpoint_transformer](https://github.com/drprojects/superpoint_transformer) you should cite the original work
 
 ```
 @article{robert2023spt,
