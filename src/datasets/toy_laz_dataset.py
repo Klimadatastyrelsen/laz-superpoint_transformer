@@ -119,7 +119,7 @@ def read_toy_laz_dataset_tile(
             # Expand ID2TRAINID to cover all possible classes up to the max in y
             max_class = int(y.max())
             if max_class >= len(ID2TRAINID):
-                extended = np.full(max_class + 1, fill_value=toy_dataset_NUM_CLASSES, dtype=np.int64)
+                extended = np.full(max_class + 1, fill_value=TOY_DATASET_NUM_CLASSES, dtype=np.int64)
                 extended[:len(ID2TRAINID)] = ID2TRAINID
                 mapping = extended
             else:
