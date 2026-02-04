@@ -16,18 +16,25 @@ This project was tested with:
 
 ## 🏗  Installation
 ### DOCKER
+```bash
 docker build -t spt-laz:latest .
-
+```
 Or download a prebuilt image from dockerhub
+
+```bash
 sudo docker pull rasmuspjohansson/kds_spt_laz_pytorch:latest
+```
 
 Run the training in a docker container while logging to /mnt/T/mnt/logs_and_models/pointcloud
 
+```bash
 docker run --gpus all --rm --shm-size=80g -it \
     -v /mnt/T/mnt/logs_and_models/pointcloud:/app/logs \
     spt-laz:latest \
     bash -c "python src/train.py experiment=semantic/vox025toy_laz_dataset.yaml logger=csv; bash"
-##direct .sh install
+```
+
+## Direct .sh install
 
 install_CUDA_ARCH_7_5.sh is setup for usage on GPU: Quadro RTX 8000
 install.sh should work on a more modern GPU but have not been tested for this project. (see [superpoint_transformer](https://github.com/drprojects/superpoint_transformer) for more info on installation)
