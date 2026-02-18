@@ -25,7 +25,8 @@ OBJECTS_UNTAR_NAME = "DALESObjects"
 ########################################################################
 
 TILES = {
-    'train': ['1km_6170_728',  '1km_6171_728',  '1km_6172_728',  '1km_6173_728'],
+    'train': ['1km_6170_728',  '1km_6171_728'],
+     #this one has water that crates areas without points!, '1km_6172_728' '1km_6173_728'],
     'val': [
         '1km_6143_590'],
 
@@ -42,13 +43,13 @@ TILES = {
 
 
 
-TOY_DATASET_NUM_CLASSES = 10
+TOY_DATASET_NUM_CLASSES = 11
 
 #ID2TRAINID = np.asarray([0,2,3,4,5,6,7,9,14,17,18])
 
 import numpy as np
 
-ID2TRAINID = 0 * np.ones(19, dtype=int)  # 0..18  (im asuming that 0 and 1 shoudl be training id 0 == ignore )
+ID2TRAINID = 0 * np.ones(173, dtype=int)  # 0..18  (im asuming that 0 and 1 shoudl be training id 0 == ignore )
 ID2TRAINID[2] = 0    # Ground
 ID2TRAINID[3] = 1    # Low vegetation
 ID2TRAINID[4] = 2    # Medium vegetation
@@ -59,6 +60,7 @@ ID2TRAINID[9] = 6    # Water
 ID2TRAINID[14] = 7   # Wire
 ID2TRAINID[17] = 8   # Bridge deck
 ID2TRAINID[18] = 9   # Highnoise
+ID2TRAINID[172] = 10  #Vehicle
 
 
 CLASS_NAMES = [
@@ -72,7 +74,8 @@ CLASS_NAMES = [
     'wire',
     'BridgeDeck',
     'HighNoise',
-    'Something']
+    'Something',
+    'Vehicle']
 
 
 
@@ -91,6 +94,7 @@ CLASS_COLORS = np.asarray([
     [  0,   8, 116]])
 
 # For instance segmentation
+#not maintained by KDS
 MIN_OBJECT_SIZE = 100
 THING_CLASSES = [2, 3, 4, 5, 6, 7]
 STUFF_CLASSES = [i for i in range(TOY_DATASET_NUM_CLASSES) if not i in THING_CLASSES]

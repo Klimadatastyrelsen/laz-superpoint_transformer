@@ -8,7 +8,7 @@ _target_: src.datamodules.toy_laz_dataset.TOY_DATASET_DataModule
 
 # These parameters are not actually used by the DataModule, but are used
 # here to facilitate model parameterization with config interpolation
-num_classes: 10
+num_classes: 11
 stuff_classes: [0, 1]
 trainval: True
 val_on_test: True
