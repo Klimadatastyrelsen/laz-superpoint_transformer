@@ -16,19 +16,33 @@ This project was tested with:
 
 ## 🏗  Installation
 ### DOCKER
+Build the image (installs libraries and compiled extensions; no project code is baked in):
+
 ```bash
 docker build -t spt-laz:latest .
 ```
-Or download a prebuilt image from dockerhub
+
+Or download a prebuilt image from dockerhub:
 
 ```bash
 sudo docker pull rasmuspjohansson/kds_spt_laz_pytorch:latest
 ```
 
-Run the training in a docker container while logging to /mnt/T/mnt/logs_and_models/pointcloud
+**Run with the project mounted** so you can edit code, configs, and data on the host without rebuilding:
+
+```bash
+# From the repo root; /app in the container is your local repo
+docker run --gpus all --rm --shm-size=80g -it \
+    -v "$(pwd)":/app \
+    spt-laz:latest \
+    bash -c "python src/train.py experiment=semantic/vox025toy_laz_dataset.yaml logger=csv; bash"
+```
+
+Logs and data live under the mounted repo (`./logs`, `./data`) unless you add extra mounts, e.g. to log elsewhere:
 
 ```bash
 docker run --gpus all --rm --shm-size=80g -it \
+    -v "$(pwd)":/app \
     -v /mnt/T/mnt/logs_and_models/pointcloud:/app/logs \
     spt-laz:latest \
     bash -c "python src/train.py experiment=semantic/vox025toy_laz_dataset.yaml logger=csv; bash"

@@ -13,9 +13,10 @@ import torch
 import laspy
 from pyproj import CRS
 
-# Add project path
-file_path = os.path.dirname(os.path.abspath(''))
-sys.path.append("/home/rajoh/projects/superpoint_transformer")
+# Add project root to path (script lives in repo root)
+_project_root = os.path.dirname(os.path.abspath(__file__))
+if _project_root not in sys.path:
+    sys.path.insert(0, _project_root)
 
 from src.transforms import SampleRecursiveMainXYAxisTiling, GridSampling3D, SampleXYTiling, NAGRemoveKeys
 from src.data import Data, Batch

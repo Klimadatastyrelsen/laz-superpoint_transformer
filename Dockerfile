@@ -1,5 +1,5 @@
 # Dockerfile for Superpoint Transformer
-# Based on install_CUDA_ARCH_7_5.sh
+# Image provides runtime + compiled deps; mount project at /app when running.
 
 FROM nvidia/cuda:11.8.0-devel-ubuntu22.04
 
@@ -10,7 +10,7 @@ ENV DEBIAN_FRONTEND=noninteractive
 ENV TORCH_CUDA_ARCH_LIST="7.5"
 ENV CC=/usr/bin/gcc-11
 ENV CXX=/usr/bin/g++-11
-# Add egg paths for FRNN and prefix_sum installed via setup.py
+# FRNN/prefix_sum (site-packages) + compiled extensions (mounted at run)
 ENV PYTHONPATH="/usr/lib/python3.8/site-packages/frnn-0.0.0-py3.8-linux-x86_64.egg:/usr/lib/python3.8/site-packages/prefix_sum-0.0.0-py3.8-linux-x86_64.egg:${PYTHONPATH}"
 
 # Install system dependencies and add deadsnakes PPA for Python 3.8
@@ -80,12 +80,11 @@ RUN pip install plyfile h5py colorhash seaborn numba && \
 # Install point_geometric_features
 RUN pip install git+https://github.com/drprojects/point_geometric_features.git@4102aa9
 
-# Copy project source code
-COPY src/ /app/src/
+# Copy only what is needed to build compiled dependencies
 COPY scripts/ /app/scripts/
-COPY configs/ /app/configs/
+RUN mkdir -p /app/src/dependencies
 
-# Clone and install FRNN (remove any existing directory first)
+# Clone and install FRNN
 RUN rm -rf /app/src/dependencies/FRNN && \
     git clone --recursive https://github.com/lxxue/FRNN.git /app/src/dependencies/FRNN
 
@@ -97,17 +96,23 @@ RUN python setup.py install
 WORKDIR /app/src/dependencies/FRNN
 RUN python setup.py install
 
-# Clone parallel-cut-pursuit and grid-graph (remove any existing directories first)
+# Clone parallel-cut-pursuit and grid-graph
 WORKDIR /app
 RUN rm -rf /app/src/dependencies/parallel_cut_pursuit /app/src/dependencies/grid_graph && \
     git clone https://gitlab.com/1a7r0ch3/parallel-cut-pursuit.git /app/src/dependencies/parallel_cut_pursuit && \
     git clone https://gitlab.com/1a7r0ch3/grid-graph.git /app/src/dependencies/grid_graph
 
-# Compile parallel-cut-pursuit
+# Compile grid_graph and parallel_cut_pursuit
 RUN python scripts/setup_dependencies.py build_ext
 
-# Copy remaining project files
-COPY . /app/
+# Copy compiled extensions to a fixed path so they work when /app is mounted
+RUN mkdir -p /opt/spt-deps/bin /opt/spt-deps/wrappers && \
+    cp -a /app/src/dependencies/grid_graph/python/bin/. /opt/spt-deps/bin/ && \
+    cp -a /app/src/dependencies/parallel_cut_pursuit/python/bin/. /opt/spt-deps/bin/ && \
+    cp -a /app/src/dependencies/parallel_cut_pursuit/python/wrappers/. /opt/spt-deps/wrappers/
+
+# Prefer image's compiled libs over mounted src/dependencies
+ENV PYTHONPATH="/opt/spt-deps/bin:/opt/spt-deps/wrappers:${PYTHONPATH}"
 
 WORKDIR /app
 
