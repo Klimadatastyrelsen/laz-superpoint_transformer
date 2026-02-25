@@ -16,25 +16,25 @@ This project was tested with:
 
 ## 🏗  Installation
 ### DOCKER
-Build the image (installs libraries and compiled extensions; no project code is baked in):
+You can use the prebuilt image from Docker Hub (no need to build yourself):
 
 ```bash
-docker build -t spt-laz:latest .
+docker pull rasmuspjohansson/kds_spt_laz_pytorch:latest
 ```
 
-Or download a prebuilt image from dockerhub:
+Or pull a specific version by date, e.g.:
 
 ```bash
-sudo docker pull rasmuspjohansson/kds_spt_laz_pytorch:latest
+docker pull rasmuspjohansson/kds_spt_laz_pytorch:20260225
 ```
 
-**Run with the project mounted** so you can edit code, configs, and data on the host without rebuilding:
+**Run with the project mounted** so you can edit code, configs, and data on the host:
 
 ```bash
 # From the repo root; /app in the container is your local repo
 docker run --gpus all --rm --shm-size=80g -it \
     -v "$(pwd)":/app \
-    spt-laz:latest \
+    rasmuspjohansson/kds_spt_laz_pytorch:latest \
     bash -c "python src/train.py experiment=semantic/vox025toy_laz_dataset.yaml logger=csv; bash"
 ```
 
@@ -44,9 +44,17 @@ Logs and data live under the mounted repo (`./logs`, `./data`) unless you add ex
 docker run --gpus all --rm --shm-size=80g -it \
     -v "$(pwd)":/app \
     -v /mnt/T/mnt/logs_and_models/pointcloud:/app/logs \
-    spt-laz:latest \
+    rasmuspjohansson/kds_spt_laz_pytorch:latest \
     bash -c "python src/train.py experiment=semantic/vox025toy_laz_dataset.yaml logger=csv; bash"
 ```
+
+**Alternatively**, build the image yourself (installs libraries and compiled extensions; no project code is baked in):
+
+```bash
+docker build -t spt-laz:latest .
+```
+
+Then use `spt-laz:latest` instead of `rasmuspjohansson/kds_spt_laz_pytorch:latest` in the `docker run` commands above.
 
 ## Direct .sh install
 

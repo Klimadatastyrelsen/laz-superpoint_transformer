@@ -17,7 +17,7 @@ task_name: "vox025toy_laz_dataset"
 
 
 trainer:
-  max_epochs: 400
+  max_epochs: 1400
 model:
   optimizer:
     lr: 0.01
