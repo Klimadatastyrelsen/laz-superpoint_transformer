@@ -178,19 +178,20 @@ def log_hyperparameters(object_dict: dict) -> None:
     trainer.logger.log_hyperparams(hparams)
 
 
-def get_metric_value(metric_dict: dict, metric_name: str) -> float:
-    """Safely retrieves value of the metric logged in LightningModule."""
-
+def get_metric_value(metric_dict: dict, metric_name: str):
+    """Safely retrieves value of the metric logged in LightningModule.
+    Returns None if the metric is not in metric_dict (e.g. validation was skipped or limited).
+    """
     if not metric_name:
         log.info("Metric name is None! Skipping metric value retrieval...")
-        return
+        return None
 
     if metric_name not in metric_dict:
-        raise Exception(
-            f"Metric value not found! <metric_name={metric_name}>\n"
-            "Make sure metric name logged in LightningModule is correct!\n"
-            "Make sure `optimized_metric` name in `hparams_search` config is correct!"
+        log.warning(
+            f"Metric value not found! <metric_name={metric_name}>. "
+            "Validation may have been skipped or limited (e.g. max_epochs=1 with check_val_every_n_epoch>1)."
         )
+        return None
 
     metric_value = metric_dict[metric_name].item()
     log.info(f"Retrieved metric value! <{metric_name}={metric_value}>")

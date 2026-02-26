@@ -1,6 +1,9 @@
 import torch
 import src
-from src.dependencies.FRNN import frnn
+try:
+    import frnn
+except ImportError:
+    from src.dependencies.FRNN import frnn
 from torch_scatter import scatter
 from torch_geometric.utils import coalesce
 from src.utils.scatter import scatter_nearest_neighbor

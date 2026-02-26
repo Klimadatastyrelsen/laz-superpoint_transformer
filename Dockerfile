@@ -1,5 +1,5 @@
 # Dockerfile for Superpoint Transformer
-# Image provides runtime + compiled deps; mount project at /app when running.
+# Image provides runtime + compiled deps at /dependencies; mount project at /app when running.
 
 FROM nvidia/cuda:11.8.0-devel-ubuntu22.04
 
@@ -10,8 +10,6 @@ ENV DEBIAN_FRONTEND=noninteractive
 ENV TORCH_CUDA_ARCH_LIST="7.5"
 ENV CC=/usr/bin/gcc-11
 ENV CXX=/usr/bin/g++-11
-# FRNN/prefix_sum (site-packages) + compiled extensions (mounted at run)
-ENV PYTHONPATH="/usr/lib/python3.8/site-packages/frnn-0.0.0-py3.8-linux-x86_64.egg:/usr/lib/python3.8/site-packages/prefix_sum-0.0.0-py3.8-linux-x86_64.egg:${PYTHONPATH}"
 
 # Install system dependencies and add deadsnakes PPA for Python 3.8
 RUN apt-get update && apt-get install -y \
@@ -46,9 +44,6 @@ RUN curl -sS https://bootstrap.pypa.io/pip/3.8/get-pip.py | python3.8
 # Upgrade pip
 RUN python -m pip install --upgrade pip
 
-# Set working directory
-WORKDIR /app
-
 # Force reinstall conflicting system packages
 RUN pip install --ignore-installed blinker
 
@@ -80,39 +75,35 @@ RUN pip install plyfile h5py colorhash seaborn numba && \
 # Install point_geometric_features
 RUN pip install git+https://github.com/drprojects/point_geometric_features.git@4102aa9
 
-# Copy only what is needed to build compiled dependencies
-COPY scripts/ /app/scripts/
-RUN mkdir -p /app/src/dependencies
+# Build compiled dependencies under /dependencies (nothing from repo under /app in image)
+RUN mkdir -p /dependencies /build
 
-# Clone and install FRNN
-RUN rm -rf /app/src/dependencies/FRNN && \
-    git clone --recursive https://github.com/lxxue/FRNN.git /app/src/dependencies/FRNN
+# Copy only scripts needed to build dependencies
+COPY scripts/ /build/scripts/
+
+# Clone and install FRNN under /dependencies
+RUN git clone --recursive https://github.com/lxxue/FRNN.git /dependencies/FRNN
 
 # Install FRNN prefix_sum
-WORKDIR /app/src/dependencies/FRNN/external/prefix_sum
+WORKDIR /dependencies/FRNN/external/prefix_sum
 RUN python setup.py install
 
-# Install FRNN
-WORKDIR /app/src/dependencies/FRNN
+# Install FRNN (into site-packages)
+WORKDIR /dependencies/FRNN
 RUN python setup.py install
 
-# Clone parallel-cut-pursuit and grid-graph
-WORKDIR /app
-RUN rm -rf /app/src/dependencies/parallel_cut_pursuit /app/src/dependencies/grid_graph && \
-    git clone https://gitlab.com/1a7r0ch3/parallel-cut-pursuit.git /app/src/dependencies/parallel_cut_pursuit && \
-    git clone https://gitlab.com/1a7r0ch3/grid-graph.git /app/src/dependencies/grid_graph
+# Clone grid_graph and parallel_cut_pursuit under /dependencies
+RUN git clone https://gitlab.com/1a7r0ch3/parallel-cut-pursuit.git /dependencies/parallel_cut_pursuit && \
+    git clone https://gitlab.com/1a7r0ch3/grid-graph.git /dependencies/grid_graph
 
-# Compile grid_graph and parallel_cut_pursuit
-RUN python scripts/setup_dependencies.py build_ext
+# Compile grid_graph and parallel_cut_pursuit using DEPENDENCIES_DIR so script finds /dependencies
+WORKDIR /build
+ENV DEPENDENCIES_DIR=/dependencies
+RUN python /build/scripts/setup_dependencies.py build_ext
 
-# Copy compiled extensions to a fixed path so they work when /app is mounted
-RUN mkdir -p /opt/spt-deps/bin /opt/spt-deps/wrappers && \
-    cp -a /app/src/dependencies/grid_graph/python/bin/. /opt/spt-deps/bin/ && \
-    cp -a /app/src/dependencies/parallel_cut_pursuit/python/bin/. /opt/spt-deps/bin/ && \
-    cp -a /app/src/dependencies/parallel_cut_pursuit/python/wrappers/. /opt/spt-deps/wrappers/
-
-# Prefer image's compiled libs over mounted src/dependencies
-ENV PYTHONPATH="/opt/spt-deps/bin:/opt/spt-deps/wrappers:${PYTHONPATH}"
+# Runtime: repo is mounted at /app; deps live at /dependencies
+ENV SPT_DEPS_DIR=/dependencies
+ENV PYTHONPATH="/dependencies/grid_graph/python/bin:/dependencies/parallel_cut_pursuit/python/wrappers:${PYTHONPATH}"
 
 WORKDIR /app
 

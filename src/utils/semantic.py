@@ -1,3 +1,4 @@
+import os
 import sys
 import hydra
 import torch
@@ -8,9 +9,10 @@ from src.utils.hydra import init_config
 
 
 src_folder = osp.dirname(osp.dirname(osp.abspath(__file__)))
+deps_root = os.environ.get("SPT_DEPS_DIR", osp.join(src_folder, "dependencies"))
 sys.path.append(src_folder)
-sys.path.append(osp.join(src_folder, "dependencies/grid_graph/python/bin"))
-sys.path.append(osp.join(src_folder, "dependencies/parallel_cut_pursuit/python/wrappers"))
+sys.path.append(osp.join(deps_root, "grid_graph/python/bin"))
+sys.path.append(osp.join(deps_root, "parallel_cut_pursuit/python/wrappers"))
 
 
 __all__ = ['compute_semantic_metrics', 'compute_semantic_metrics_s3dis_6fold']

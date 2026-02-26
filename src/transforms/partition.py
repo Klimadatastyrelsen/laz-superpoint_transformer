@@ -1,3 +1,4 @@
+import os
 import sys
 import os.path as osp
 
@@ -9,10 +10,11 @@ from src.data import Data, NAG, Cluster, InstanceData
 from src.utils.cpu import available_cpu_count
 from src.utils import xy_partition
 
-dependencies_folder = osp.dirname(osp.dirname(osp.abspath(__file__)))
-sys.path.append(dependencies_folder)
-sys.path.append(osp.join(dependencies_folder, "dependencies/grid_graph/python/bin"))
-sys.path.append(osp.join(dependencies_folder, "dependencies/parallel_cut_pursuit/python/wrappers"))
+src_folder = osp.dirname(osp.dirname(osp.abspath(__file__)))
+deps_root = os.environ.get("SPT_DEPS_DIR", osp.join(src_folder, "dependencies"))
+sys.path.append(src_folder)
+sys.path.append(osp.join(deps_root, "grid_graph/python/bin"))
+sys.path.append(osp.join(deps_root, "parallel_cut_pursuit/python/wrappers"))
 
 from grid_graph import edge_list_to_forward_star
 from cp_d0_dist import cp_d0_dist

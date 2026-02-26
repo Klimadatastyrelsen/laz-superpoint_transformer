@@ -1,1 +1,7 @@
 __pycache__/
+
+# Compiled deps (use install script or Docker image; in Docker deps live at /dependencies)
+src/dependencies/
+
+# Secrets (do not commit)
+hftoken_write.txt

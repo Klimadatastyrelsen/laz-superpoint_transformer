@@ -23,7 +23,7 @@ import re
 # Keep track of directories of interest
 WORK_DIR = osp.realpath(os.curdir)
 PROJECT_DIR = osp.realpath(osp.dirname(osp.dirname(__file__)))
-DEPENDENCIES_DIR = osp.join(PROJECT_DIR, 'src', 'dependencies')
+DEPENDENCIES_DIR = os.environ.get("DEPENDENCIES_DIR", osp.join(PROJECT_DIR, 'src', 'dependencies'))
 
 # Find the Numpy headers
 include_dirs = [numpy.get_include(), "../include"]
