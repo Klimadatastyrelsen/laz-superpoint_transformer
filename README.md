@@ -25,7 +25,7 @@ docker pull rasmuspjohansson/kds_spt_laz_pytorch:latest
 Or pull a specific version by date, e.g.:
 
 ```bash
-docker pull rasmuspjohansson/kds_spt_laz_pytorch:20260225
+docker pull rasmuspjohansson/kds_spt_laz_pytorch:20260226
 ```
 
 **Run with the project mounted** so you can edit code, configs, and data on the host:
