@@ -70,7 +70,8 @@ RUN pip install plyfile h5py colorhash seaborn numba && \
     pip install "rich<=14.0" && \
     pip install torch_tb_profiler wandb open3d gdown && \
     pip install ipyfilechooser && \
-    pip install "laspy[laszip]" pyproj
+    pip install "laspy[laszip]" pyproj && \
+    pip install huggingface_hub
 
 # Install point_geometric_features
 RUN pip install git+https://github.com/drprojects/point_geometric_features.git@4102aa9

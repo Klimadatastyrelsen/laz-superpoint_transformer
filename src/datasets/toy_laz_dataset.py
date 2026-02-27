@@ -227,30 +227,26 @@ class Toy_laz_dataset(BaseDataset):
         return TILES
 
     def download_dataset(self) -> None:
-        """Download the DALES Objects dataset.
+        """Download the toy LAZ dataset from Hugging Face if not already present.
         """
-        '''
-        # Manually download the dataset
-        if not osp.exists(osp.join(self.root, self._zip_name)):
+        try:
+            from huggingface_hub import snapshot_download
+        except ImportError:
             log.error(
-                f"\nDALES does not support automatic download.\n"
-                f"Please, register yourself by filling up the form at "
-                f"{self._form_url}\n"
-                f"From there, manually download the '{self._zip_name}' into "
-                f"your '{self.root}/' directory and re-run.\n"
-                f"The dataset will automatically be unzipped into the "
-                f"following structure:\n"
-                f"{self.raw_file_structure}\n"
-                f"⛔ Make sure you DO NOT download the "
-                f"'{self._las_name}' nor '{self._ply_name}' versions, which "
-                f"do not contain all required point attributes.\n")
-            sys.exit(1)
-
-        # Unzip the file and rename it into the `root/raw/` directory
-        extract_tar(osp.join(self.root, self._zip_name), self.root)
-        shutil.rmtree(self.raw_dir)
-        os.rename(osp.join(self.root, self._unzip_name), self.raw_dir)
-        '''
+                "Auto-download requires the 'huggingface_hub' package. "
+                "Install it with: pip install huggingface_hub\n"
+                "Alternatively, download the dataset manually as described in the README."
+            )
+            raise
+        token = os.environ.get("HF_TOKEN") or None
+        self.download_message("toy LAZ dataset from Hugging Face")
+        snapshot_download(
+            repo_id=HF_DATASET_REPO_ID,
+            repo_type="dataset",
+            local_dir=self.raw_dir,
+            token=token,
+        )
+        log.info("Downloaded toy LAZ dataset to %s", self.raw_dir)
     def read_single_raw_cloud(self, raw_cloud_path: str) -> 'Data':
         """Read a single raw cloud and return a `Data` object, ready to
         be passed to `self.pre_transform`.

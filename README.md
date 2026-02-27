@@ -28,21 +28,27 @@ Or pull a specific version by date, e.g.:
 docker pull rasmuspjohansson/kds_spt_laz_pytorch:20260226
 ```
 
-**Run with the project mounted** so you can edit code, configs, and data on the host:
+**Run with the project mounted** so you can edit code, configs, and data on the host. The image includes `huggingface_hub`; the toy LAZ dataset will auto-download from Hugging Face on first run if `data/toy_laz_dataset/raw/` is missing. For private or gated repos, pass your Hugging Face token into the container (e.g. from a file): use `-e HF_TOKEN="$(cat hftoken_write.txt)"` in the command below.
 
 ```bash
 # From the repo root; /app in the container is your local repo
 docker run --gpus all --rm --shm-size=80g -it \
     -v "$(pwd)":/app \
+    -e HF_TOKEN="$(cat hftoken_write.txt)" \
     rasmuspjohansson/kds_spt_laz_pytorch:latest \
     bash -c "python src/train.py experiment=semantic/vox025toy_laz_dataset.yaml logger=csv; bash"
 ```
+
+If you do not have a token file, omit the `-e HF_TOKEN=...` line (public dataset).
+
+**Verification:** Pull the image, run the command above from the repo root (with `HF_TOKEN` if you use a token file). Training should start; if `data/toy_laz_dataset/raw/` is missing, the dataset will auto-download from Hugging Face first. To test auto-download on a clean clone, remove the raw folder first (e.g. `sudo rm -rf data/toy_laz_dataset/raw` if it was created by Docker).
 
 Logs and data live under the mounted repo (`./logs`, `./data`) unless you add extra mounts, e.g. to log elsewhere:
 
 ```bash
 docker run --gpus all --rm --shm-size=80g -it \
     -v "$(pwd)":/app \
+    -e HF_TOKEN="$(cat hftoken_write.txt)" \
     -v /mnt/T/mnt/logs_and_models/pointcloud:/app/logs \
     rasmuspjohansson/kds_spt_laz_pytorch:latest \
     bash -c "python src/train.py experiment=semantic/vox025toy_laz_dataset.yaml logger=csv; bash"
@@ -57,7 +63,9 @@ docker build -t spt-laz:latest .
 Then use `spt-laz:latest` instead of `rasmuspjohansson/kds_spt_laz_pytorch:latest` in the `docker run` commands above.
 
 ### Data: toy LAZ dataset
-The toy LAZ dataset (`.laz` files under `data/toy_laz_dataset/raw/`) is not in the repo. Download it from Hugging Face so that training works:
+The toy LAZ dataset (`.laz` files under `data/toy_laz_dataset/raw/`) is not in the repo. On first run, the dataset pipeline will **automatically** download it from Hugging Face if the raw data is missing. The Docker image already includes `huggingface_hub`; when running with the command above, pass `HF_TOKEN` into the container (e.g. `-e HF_TOKEN="$(cat hftoken_write.txt)"`) for private or gated repos. For local (non-Docker) runs, install `huggingface_hub` (e.g. `pip install -r requirements.txt`) and set `HF_TOKEN` in the environment if needed.
+
+**Manual download (optional)** — e.g. for offline prep or if auto-download fails:
 
 ```bash
 # From the repo root. Requires: pip install huggingface_hub

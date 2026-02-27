@@ -19,6 +19,9 @@ PLY_UNTAR_NAME = "dales_ply"
 OBJECTS_TAR_NAME = 'DALESObjects.tar.gz'
 OBJECTS_UNTAR_NAME = "DALESObjects"
 
+# Hugging Face dataset (used for auto-download in Toy_laz_dataset)
+HF_DATASET_REPO_ID = 'rasmuspjohansson/KDS_laz_dataset'
+
 
 ########################################################################
 #                              Data splits                             #

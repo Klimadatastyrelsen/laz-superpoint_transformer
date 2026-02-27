@@ -1,0 +1,2 @@
+# Optional: required for auto-download of toy LAZ dataset from Hugging Face
+huggingface_hub
