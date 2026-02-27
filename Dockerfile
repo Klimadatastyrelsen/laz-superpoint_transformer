@@ -102,8 +102,9 @@ ENV DEPENDENCIES_DIR=/dependencies
 RUN python /build/scripts/setup_dependencies.py build_ext
 
 # Runtime: repo is mounted at /app; deps live at /dependencies
+# FRNN and prefix_sum are installed as eggs; add egg paths explicitly (PYTHONPATH does not trigger .pth processing)
 ENV SPT_DEPS_DIR=/dependencies
-ENV PYTHONPATH="/dependencies/grid_graph/python/bin:/dependencies/parallel_cut_pursuit/python/wrappers:${PYTHONPATH}"
+ENV PYTHONPATH="/usr/lib/python3.8/site-packages/prefix_sum-0.0.0-py3.8-linux-x86_64.egg:/usr/lib/python3.8/site-packages/frnn-0.0.0-py3.8-linux-x86_64.egg:/dependencies/grid_graph/python/bin:/dependencies/parallel_cut_pursuit/python/wrappers:${PYTHONPATH}"
 
 WORKDIR /app
 

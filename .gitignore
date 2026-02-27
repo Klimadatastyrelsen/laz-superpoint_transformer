@@ -5,3 +5,7 @@ src/dependencies/
 
 # Secrets (do not commit)
 hftoken_write.txt
+
+# LAZ data (downloaded from Hugging Face, not stored in repo)
+*.laz
+data/toy_laz_dataset/raw/
