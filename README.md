@@ -56,6 +56,24 @@ docker build -t spt-laz:latest .
 
 Then use `spt-laz:latest` instead of `rasmuspjohansson/kds_spt_laz_pytorch:latest` in the `docker run` commands above.
 
+### Data: toy LAZ dataset
+The toy LAZ dataset (`.laz` files under `data/toy_laz_dataset/raw/`) is not in the repo. Download it from Hugging Face so that training works:
+
+```bash
+# From the repo root. Requires: pip install huggingface_hub
+python -c "
+from huggingface_hub import snapshot_download
+snapshot_download(
+    repo_id='rasmuspjohansson/KDS_laz_dataset',
+    repo_type='dataset',
+    local_dir='data/toy_laz_dataset/raw',
+)
+print('Downloaded to data/toy_laz_dataset/raw (train/ and test/).')
+"
+```
+
+This creates `data/toy_laz_dataset/raw/train/` and `data/toy_laz_dataset/raw/test/` with the `.laz` files. Then run the Docker training command above.
+
 ## Direct .sh install
 
 install_CUDA_ARCH_7_5.sh is setup for usage on GPU: Quadro RTX 8000
