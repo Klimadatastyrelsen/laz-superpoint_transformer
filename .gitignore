@@ -1,4 +1,5 @@
 __pycache__/
+*.pyc
 
 # Compiled deps (use install script or Docker image; in Docker deps live at /dependencies)
 src/dependencies/
