@@ -8,9 +8,8 @@ Please have a look at the original project in order to learn more.
 This project was tested with:
 - Linux OS
 - **64G** RAM
-- NVIDIA Quadro RTX 8000  (49 Gig)
-
-- CUDA 12.1
+- NVIDIA Quadro RTX 8000, Tesla V100, or A100
+- CUDA 11.8 / 12.1
 
 <br>
 
@@ -25,7 +24,7 @@ docker pull rasmuspjohansson/kds_spt_laz_pytorch:latest
 Or pull a specific version by date, e.g.:
 
 ```bash
-docker pull rasmuspjohansson/kds_spt_laz_pytorch:20260226
+docker pull rasmuspjohansson/kds_spt_laz_pytorch:20260302
 ```
 
 **Run with the project mounted** so you can edit code, configs, and data on the host:

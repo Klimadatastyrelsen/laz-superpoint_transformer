@@ -7,7 +7,7 @@ FROM nvidia/cuda:11.8.0-devel-ubuntu22.04
 ENV DEBIAN_FRONTEND=noninteractive
 
 # Set CUDA architecture for older GPUs
-ENV TORCH_CUDA_ARCH_LIST="7.5"
+ENV TORCH_CUDA_ARCH_LIST="7.0;7.5;8.0"
 ENV CC=/usr/bin/gcc-11
 ENV CXX=/usr/bin/g++-11
 
