@@ -6,8 +6,9 @@
 
 set -uo pipefail
 
-ORCH_DIR="${LAZ_ORCH_DIR:-/home/rajoh/projects/ML_verify_all_ML_repos_work}"
-LOG_FILE="${1:-${ORCH_DIR}/logs/laz_logs.txt}"
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+LOG_DIR="${LAZ_LOG_DIR:-${SCRIPT_DIR}/logs}"
+LOG_FILE="${1:-${LOG_DIR}/laz_logs.txt}"
 
 # Whether the .laz training verification keywords are also required.
 RUN_LAZ_VERIFY="${RUN_LAZ_VERIFY:-0}"

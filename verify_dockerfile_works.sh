@@ -2,16 +2,15 @@
 # verify_dockerfile_works.sh
 # Build the Superpoint Transformer Docker image and run the smoke test (and,
 # once present, the .laz support test) inside the container with GPU access.
-# Output is logged to ${ORCH_DIR}/logs/laz_logs.txt; the orchestrator folder is
-# mounted so the container writes the log on the host.
+# Output is logged to <repo>/logs/laz_logs.txt (override the directory with
+# LAZ_LOG_DIR); that directory is mounted so the container writes on the host.
 
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
-# Present (orchestrator) folder whose logs/ dir receives the log file.
-ORCH_DIR="${LAZ_ORCH_DIR:-/home/rajoh/projects/ML_verify_all_ML_repos_work}"
-LOG_DIR="${ORCH_DIR}/logs"
+# Directory that receives the log file. Defaults to the repo's own logs/ dir.
+LOG_DIR="${LAZ_LOG_DIR:-${SCRIPT_DIR}/logs}"
 LOG_FILE="${LOG_DIR}/laz_logs.txt"
 
 IMAGE_TAG="${SPT_IMAGE:-spt_merged:latest}"
@@ -29,7 +28,7 @@ append() { echo "$*" >> "${LOG_FILE}"; }
 append "verify_dockerfile_works log"
 append "Generated: $(date -Iseconds)"
 append "Image: ${IMAGE_TAG}"
-append "Orchestrator mount: ${ORCH_DIR}"
+append "Log dir mount: ${LOG_DIR}"
 append ""
 
 if ! command -v docker >/dev/null 2>&1; then
@@ -59,7 +58,7 @@ run_in_container() {
   append ""
   append "=== ${label} ==="
   if docker run --gpus all --rm --shm-size="${SHM_SIZE}" \
-      -v "${ORCH_DIR}:${ORCH_DIR}" \
+      -v "${LOG_DIR}:${LOG_DIR}" \
       -e PYTHONUNBUFFERED=1 \
       "${IMAGE_TAG}" \
       bash -lc "set -o pipefail; ${cmd} 2>&1 | tee -a '${LOG_FILE}'"; then
