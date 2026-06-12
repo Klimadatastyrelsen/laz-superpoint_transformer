@@ -221,6 +221,111 @@ EZ-SP models. To install an environment with this, use:
 
 <br>
 
+## 🐳  Docker
+
+The [`Dockerfile`](Dockerfile) builds a self-contained image (Python 3.8, PyTorch
+2.2 + CUDA 11.8, PyG, FRNN, laspy, etc.). Code is baked into the image; mount
+host folders at runtime so **data**, **logs**, and **checkpoints** persist on
+your machine.
+
+**Prerequisites:** Docker with [NVIDIA Container Toolkit](https://docs.nvidia.com/datacenter/cloud-native/container-toolkit/install-guide.html) (`docker run --gpus all` must work).
+
+### Build the image
+
+From the repository root:
+
+```bash
+docker build -t spt_merged:latest .
+```
+
+The first build can take a while (FRNN is compiled from source). Override the
+tag with `SPT_IMAGE` when using the verification script (see below).
+
+### Run `.laz` training with local data and outputs
+
+Create host directories for the toy dataset and training outputs, then mount
+them into the container at the same paths the project expects (`data/` and
+`logs/` under `/app`):
+
+```bash
+mkdir -p data logs
+
+# Download the toy .laz tiles on the host (or mount your own dataset tree)
+./scripts/download_toy_laz_dataset.sh
+
+docker run --gpus all --rm -it \
+  --shm-size=32g \
+  -v "$(pwd)/data:/app/data" \
+  -v "$(pwd)/logs:/app/logs" \
+  spt_merged:latest \
+  bash -lc 'cd /app && python src/train.py experiment=semantic/vox025toy_laz_dataset logger=csv'
+```
+
+Hydra writes each run under `logs/<task_name>/runs/<timestamp>/`. Checkpoints
+land in `checkpoints/` inside that run directory (e.g.
+`logs/vox025toy_laz_dataset/runs/2026-06-12_14-30-00/checkpoints/`). Because
+`logs/` is mounted, everything stays on the host after the container exits.
+
+For a quick smoke run (same as
+[`verify_laz_support_works.py`](verify_laz_support_works.py)):
+
+```bash
+docker run --gpus all --rm \
+  --shm-size=32g \
+  -v "$(pwd)/data:/app/data" \
+  -v "$(pwd)/logs:/app/logs" \
+  spt_merged:latest \
+  bash -lc 'cd /app && python verify_laz_support_works.py'
+```
+
+Use your own `.laz` tiles by placing them under
+`data/<your_dataset>/raw/{train,val,test}/` on the host and pointing the
+experiment config at that datamodule (see [Training on `.laz` / `.las`
+files](#training-on-laz--las-files) above).
+
+### Verify the Docker image
+
+[`verify_dockerfile_works.sh`](verify_dockerfile_works.sh) builds the image (unless
+skipped), runs the environment smoke test inside the container, and optionally
+runs the `.laz` training verification. Output is appended to
+`logs/laz_logs.txt` on the host (the script mounts that directory into the
+container so logs survive after `docker run --rm`).
+
+```bash
+# Phase 1 only: build image + environment smoke test
+./verify_dockerfile_works.sh
+
+# Phase 1 + short .laz training run inside the container
+RUN_LAZ_VERIFY=1 ./verify_dockerfile_works.sh
+
+# Re-use an existing image (skip docker build)
+SPT_SKIP_BUILD=1 ./verify_dockerfile_works.sh
+
+# Custom image tag or log location
+SPT_IMAGE=myregistry/spt:v1 LAZ_LOG_DIR=/tmp/spt_logs ./verify_dockerfile_works.sh
+```
+
+After a run, grep the log for pass/fail markers:
+
+```bash
+./check_verification_logs.sh
+RUN_LAZ_VERIFY=1 ./check_verification_logs.sh   # also require LAZ_TRAIN_OK
+```
+
+The script exits 0 only when required keywords (e.g. `DOCKER_BUILD_OK`,
+`SMOKE_ALL_OK`, `OVERALL_RESULT: PASS`, and optionally `LAZ_TRAIN_OK`) are
+present and no failure markers appear.
+
+| Variable | Default | Purpose |
+|----------|---------|---------|
+| `SPT_IMAGE` | `spt_merged:latest` | Docker image tag to build or run |
+| `SPT_SKIP_BUILD` | `0` | Set to `1` to skip `docker build` |
+| `SPT_SHM_SIZE` | `32g` | Passed to `docker run --shm-size` |
+| `RUN_LAZ_VERIFY` | `0` | Set to `1` to also run `verify_laz_support_works.py` |
+| `LAZ_LOG_DIR` | `<repo>/logs` | Host directory mounted for verification logs |
+
+<br>
+
 ### 🔩  Project structure
 ```
 └── superpoint_transformer
