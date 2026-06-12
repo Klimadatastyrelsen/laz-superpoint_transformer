@@ -243,6 +243,7 @@ class BaseDataset(InMemoryDataset):
             segment_no_save_keys: List[str] = None,
             segment_load_keys: List[str] = None,
             nano: bool = False,
+            min_points_per_subtile: int = 0,
             **kwargs):
 
         assert stage in ['train', 'val', 'trainval', 'test']
@@ -269,6 +270,11 @@ class BaseDataset(InMemoryDataset):
         self._segment_no_save_keys = segment_no_save_keys
         self._segment_load_keys = segment_load_keys
         self._nano = nano
+        # Robustness: subtiles with fewer than `min_points_per_subtile`
+        # points are skipped at preprocessing (a `.skip` sentinel is written
+        # instead of an `.h5`). Set to 0 to disable (default, behavior
+        # identical to upstream).
+        self._min_points_per_subtile = max(int(min_points_per_subtile), 0)
 
         if in_memory:
             log.warning(
@@ -348,13 +354,13 @@ class BaseDataset(InMemoryDataset):
         if self.in_memory:
             in_memory_data = [
                 NAG.load(
-                    self.processed_paths[i],
+                    p,
                     low=int(self._nano),
                     keys_low=self.point_load_keys if not self._nano else self.segment_load_keys,
                     keys=self.segment_load_keys,
                     non_fp_to_long=self.load_non_fp_to_long,
                     rgb_to_float=self.load_rgb_to_float)
-                for i in range(len(self))]
+                for p in self._valid_processed_paths]
             
             if self.transform is not None:
                 in_memory_data = [self.transform(x) for x in in_memory_data]
@@ -659,6 +665,33 @@ class BaseDataset(InMemoryDataset):
             osp.join(self.stage, self.pre_transform_hash, f'{w}.h5')
             for w in self.cloud_ids]
 
+    @property
+    def min_points_per_subtile(self) -> int:
+        """Subtiles with fewer points than this are skipped at
+        preprocessing. 0 disables the behavior.
+        """
+        return self._min_points_per_subtile
+
+    @staticmethod
+    def _skip_path(cloud_path: str) -> str:
+        """Path of the `.skip` sentinel written next to where the `.h5`
+        would otherwise live, for subtiles skipped at preprocessing.
+        """
+        return osp.splitext(cloud_path)[0] + '.skip'
+
+    @property
+    def _valid_processed_paths(self) -> List[str]:
+        """Processed `.h5` paths that actually exist on disk, in the same
+        order as `processed_paths`. Subtiles skipped at preprocessing (see
+        `min_points_per_subtile`) have a `.skip` sentinel instead of an
+        `.h5` and are therefore excluded. When skipping is disabled (the
+        default), this is identical to `processed_paths` and avoids any
+        per-path disk check.
+        """
+        if self.min_points_per_subtile <= 0:
+            return self.processed_paths
+        return [p for p in self.processed_paths if osp.exists(p)]
+
     def processed_to_raw_path(self, processed_path: str) -> str:
         """Given a processed cloud path from `self.processed_paths`,
         return the absolute path to the corresponding raw cloud.
@@ -745,7 +778,12 @@ class BaseDataset(InMemoryDataset):
                 "make use of another pre-filtering technique, make sure to "
                 "delete '{self.processed_dir}' first")
 
-        if files_exist(self.processed_paths):  # pragma: no cover
+        # A tile is considered done if its `.h5` exists OR it was
+        # intentionally skipped (a `.skip` sentinel exists). This prevents
+        # endless re-processing of skipped sparse subtiles.
+        if len(self.processed_paths) > 0 and all(
+                osp.exists(p) or osp.exists(self._skip_path(p))
+                for p in self.processed_paths):  # pragma: no cover
             return
 
         if self.log and 'pytest' not in sys.modules:
@@ -797,8 +835,9 @@ class BaseDataset(InMemoryDataset):
         """Internal method called by `self.process` to preprocess a
         single cloud of 3D points.
         """
-        # If required files exist, skip processing
-        if osp.exists(cloud_path):
+        # If required files exist, skip processing. Also skip if this
+        # subtile was previously flagged as too sparse (`.skip` sentinel).
+        if osp.exists(cloud_path) or osp.exists(self._skip_path(cloud_path)):
             return
 
         # Create necessary parent folders if need be
@@ -833,6 +872,22 @@ class BaseDataset(InMemoryDataset):
             if torch.cuda.is_available():
                 torch.cuda.synchronize()
             times['tiling'] = time() - start
+
+        # Robustness: skip subtiles that are too sparse to yield a useful
+        # superpoint hierarchy (e.g. mostly-water ALS tiles). We write a
+        # `.skip` sentinel and return, instead of crashing deep in the
+        # preprocessing pipeline or wasting compute on every reprocess.
+        if self.min_points_per_subtile > 0:
+            n_pts = data.num_points
+            if n_pts < self.min_points_per_subtile:
+                skip_path = self._skip_path(cloud_path)
+                os.makedirs(osp.dirname(skip_path), exist_ok=True)
+                open(skip_path, 'w').close()
+                log.info(
+                    f"Skipping sparse subtile '{osp.basename(cloud_path)}' "
+                    f"({n_pts} < min_points_per_subtile="
+                    f"{self.min_points_per_subtile})")
+                return
 
         # Apply pre_transform
         if verbose or src.is_debug_enabled():
@@ -1038,6 +1093,7 @@ class BaseDataset(InMemoryDataset):
         # To be as fast as possible, we read only the last level of each
         # NAG, and accumulate the class counts from the label histograms
         counts = torch.zeros(self.num_classes)
+        valid_paths = self._valid_processed_paths
         for i in range(len(self)):
             if self.in_memory:
                 sample = self.in_memory_data[i]
@@ -1045,13 +1101,13 @@ class BaseDataset(InMemoryDataset):
             else:
                 if sample_is_nag:
                     y = NAG.load(
-                        self.processed_paths[i],
+                        valid_paths[i],
                         low=low,
                         keys_low=['y'],
                         non_fp_to_long=True)[low].y
                 else:
                     y = Data.load(
-                        self.processed_paths[i],
+                        valid_paths[i],
                         keys=['y'],
                         non_fp_to_long=True).y
             counts += y.sum(dim=0)[:self.num_classes]
@@ -1069,8 +1125,13 @@ class BaseDataset(InMemoryDataset):
         return weights
 
     def __len__(self) -> int:
-        """Number of clouds in the dataset."""
-        return len(self.cloud_ids)
+        """Number of clouds in the dataset. Excludes subtiles skipped at
+        preprocessing (see `min_points_per_subtile`); identical to the
+        number of cloud ids when nothing is skipped.
+        """
+        if self.min_points_per_subtile <= 0:
+            return len(self.cloud_ids)
+        return len(self._valid_processed_paths)
 
     def __getitem__(self, idx: int) -> Union['NAG', 'Data']:
         """Load a preprocessed NAG from disk and apply `self.transform`
@@ -1096,7 +1157,7 @@ class BaseDataset(InMemoryDataset):
 
         # Read the sample from HDD
         sample = NAG.load(
-            self.processed_paths[idx],
+            self._valid_processed_paths[idx],
             low=int(self._nano),
             keys_low=self.point_load_keys if not self._nano else self.segment_load_keys,
             keys=self.segment_load_keys,

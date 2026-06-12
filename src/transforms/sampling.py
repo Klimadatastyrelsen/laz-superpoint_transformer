@@ -187,6 +187,15 @@ class GridSampling3D(Transform):
         # In-place option will modify the input Data object directly
         data = data_in if self.inplace else data_in.clone()
 
+        # Robustness: `grid_cluster` does not support empty input. Return the
+        # (empty) cloud unchanged, just setting the expected attributes.
+        if data.num_points == 0:
+            if self.quantize_coords:
+                data.coords = torch.empty(
+                    (0, 3), dtype=torch.int, device=data.pos.device)
+            data.grid_size = torch.tensor([self.grid_size])
+            return data
+
         # If the aggregation mode is 'last', shuffle the points order.
         # Note that voxelization of point attributes will be stochastic
         if self.mode == 'last':
@@ -491,11 +500,25 @@ class SampleXYTiling(Transform):
         self.y = y
 
     def _process(self, data):
+        # Robustness: nothing to tile on an empty cloud.
+        if data.num_points == 0:
+            empty = torch.empty(0, dtype=torch.long, device=data.pos.device)
+            return data.select(empty)[0]
+
         # Compute the xy coordinates in the tiling grid, for each point
         xy = data.pos[:, :2].clone().view(-1, 2)
         xy -= xy.min(dim=0).values.view(1, 2)
-        xy /= xy.max(dim=0).values.view(1, 2)
-        xy = xy.clip(min=0, max=1) * self.tiling.view(1, 2)
+
+        # Robustness: when all points share the same X or Y (zero span), the
+        # division would produce NaN/inf. Clamp the span to 1 in that case.
+        span = xy.max(dim=0).values.view(1, 2)
+        span = torch.where(span > 0, span, torch.ones_like(span))
+        xy /= span
+
+        # Clip just below 1 so points on the upper edge stay in the last
+        # tile instead of landing in an out-of-range tile index.
+        eps = 1e-6
+        xy = xy.clip(min=0, max=1 - eps) * self.tiling.view(1, 2)
         xy = xy.long()
 
         # Select only the points in the desired tile
@@ -538,6 +561,11 @@ class QuantizePointCoordinates(Transform):
             return nag_in
 
         data = nag_in[0]
+
+        # Robustness: `grid_cluster` does not support empty input. Leave an
+        # empty point cloud untouched.
+        if data.num_points == 0:
+            return nag_in
 
         # Convert point coordinates to the voxel grid coordinates
         coords = torch.round((data.pos) / self.grid_size)

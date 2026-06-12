@@ -117,6 +117,13 @@ class PointFeatures(Transform):
         assert data.num_nodes < np.iinfo(np.uint32).max, \
             "Too many nodes for `uint32` indices"
 
+        # Robustness: an empty cloud has no points to compute features for.
+        if data.num_points == 0:
+            log.warning(
+                "PointFeatures received an empty point cloud; returning it "
+                "unchanged.")
+            return data
+
         # Build the set of keys that must be computed/updated. In
         # particular, if `overwrite=False`, we do not modify
         # already-existing keys in the input Data. Except for 'rgb', for

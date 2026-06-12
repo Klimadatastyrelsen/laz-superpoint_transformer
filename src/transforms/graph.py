@@ -1,4 +1,5 @@
 import torch
+import logging
 import itertools
 import numpy as np
 from time import time
@@ -28,6 +29,8 @@ from src.utils import (
     geometric_features,
     arange_interleave,
     csr_to_dense)
+
+log = logging.getLogger(__name__)
 
 __all__ = [
     'AdjacencyGraph',
@@ -905,11 +908,19 @@ def _horizontal_graph_by_radius_for_single_level(
     data.edge_index = None
     data.edge_attr = None
 
-    # Exit in case the i_level graph contains only one node
+    # Robustness: a NAG level may collapse to a single node (independent of
+    # total point count, depending on the partition). Rather than crashing,
+    # warn and emit an empty horizontal graph; the empty edge_index is
+    # absorbed downstream (see `subedges`).
     if num_nodes < 2:
-        raise ValueError(
-            f"Input NAG only has 1 node at level={i_level}. Cannot compute "
-            f"radius-based horizontal graph.")
+        log.warning(
+            f"NAG only has {num_nodes} node(s) at level={i_level}. Skipping "
+            f"horizontal graph construction.")
+        data.edge_index = torch.zeros(
+            (2, 0), dtype=torch.long, device=nag[0].pos.device)
+        data.edge_attr = None
+        nag._list[i_level] = data
+        return nag
 
     # Compute the super_index for level-0 points wrt the target level
     super_index = nag.get_super_index(i_level)

@@ -152,6 +152,17 @@ def scatter_nearest_neighbor(
         "Does not support duplicate edges, please coalesce the edges" \
         " before calling this function"
 
+    # Robustness: with very few superpoints at deep hierarchy levels, the
+    # radius graph between segments can be empty. Without this guard the
+    # chunking branch produces an empty list and the final torch.cat raises
+    # "expected a non-empty list of Tensors". Return correctly-shaped empties.
+    if edge_index.shape[1] == 0:
+        candidate = torch.empty(
+            (0, points.shape[1]), dtype=points.dtype, device=points.device)
+        candidate_idx = torch.empty(
+            (2, 0), dtype=edge_index.dtype, device=edge_index.device)
+        return candidate, candidate_idx
+
     # Recursive call in case chunk is specified. Chunk allows limiting
     # the number of edges processed at once. This might alleviate
     # memory use

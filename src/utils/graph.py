@@ -163,6 +163,14 @@ def subedges(
     # Number of segments
     num_segments = index.max() + 1
 
+    # Robustness: if trimming leaves no edges (e.g. a single-node level whose
+    # horizontal graph was emitted empty upstream), the chunking branch below
+    # would torch.cat an empty list and crash. Return correctly-shaped empties.
+    if edge_index.shape[1] == 0:
+        ST_pairs = torch.empty((2, 0), dtype=torch.long, device=points.device)
+        ST_uid = torch.empty((0,), dtype=torch.long, device=points.device)
+        return edge_index, ST_pairs, ST_uid
+
     # Recursive call in case chunk is specified. Chunk allows limiting
     # the number of edges processed at once. This might alleviate
     # memory use

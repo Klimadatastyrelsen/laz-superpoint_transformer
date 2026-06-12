@@ -1170,6 +1170,19 @@ class Batch(PyGBatch, Data):
             for d in data_list:
                 d.raise_if_edge_keys()
 
+            # Robustness: when batching samples whose hierarchies differ in
+            # structure, optional keys (e.g. 'super_index', 'sub') may be
+            # present on some samples and absent on others. PyG's collate()
+            # assumes a homogeneous key set, so exclude any key not shared by
+            # all samples before delegating to it.
+            if exclude_keys is None:
+                exclude_keys = []
+            else:
+                exclude_keys = list(exclude_keys)
+            for k in data_list[0].to_dict().keys():
+                if k not in exclude_keys and not all(k in d for d in data_list):
+                    exclude_keys.append(k)
+
             # Little trick to prevent Batch.from_data_list from crashing
             # when some Data objects have edges while others don't
             has = [
@@ -1205,6 +1218,8 @@ class Batch(PyGBatch, Data):
                     continue
                 dtype = torch.float if v.is_floating_point() else torch.long
                 for d in data_list:
+                    if k not in d:
+                        continue
                     d[k] = d[k].to(dtype)
 
             # PyG's collate() (and torch's default_collate()) mechanism
@@ -1219,6 +1234,8 @@ class Batch(PyGBatch, Data):
                     continue
                 # Find the appropriate dtype for the concatenation of
                 # all the tensors and cast all tensors to the same one
+                if not all(k in d for d in data_list):
+                    continue
                 dtype = torch.stack([d[k].view(-1)[0] for d in data_list]).dtype
                 for d in data_list:
                     d[k] = d[k].to(dtype)
@@ -1236,6 +1253,10 @@ class Batch(PyGBatch, Data):
         # Note we will need to do the same in `get_example` to avoid
         # breaking PyG Batch mechanisms
         for k, v in data_list[0].to_dict().items():
+            # The key may have been excluded from the batch because it was
+            # absent from some samples (see dynamic exclusion above).
+            if k not in batch:
+                continue
             if isinstance(v, CSRData):
                 batch[k] = v.get_batch_class().from_list(batch[k])
 

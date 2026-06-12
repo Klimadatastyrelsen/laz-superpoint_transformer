@@ -54,7 +54,23 @@ class KNN(Transform):
         # Mechanism to skip the transform if needed
         if self.r_max <= 0 or self.k <= 0:
             return data
-        
+
+        # Robustness: nothing to search on an empty cloud. Initialise empty
+        # neighbor attributes and return.
+        if data.num_points == 0:
+            if self.save_as_csr:
+                pointers = torch.zeros(1, dtype=torch.long, device=data.pos.device)
+                empty_idx = torch.empty(0, dtype=torch.long, device=data.pos.device)
+                empty_dist = torch.empty(0, device=data.pos.device)
+                data.neighbors = CSRData(
+                    pointers, empty_idx, empty_dist, is_index_value=[True, False])
+            else:
+                data.neighbor_index = torch.empty(
+                    (0, self.k), dtype=torch.long, device=data.pos.device)
+                data.neighbor_distance = torch.empty(
+                    (0, self.k), device=data.pos.device)
+            return data
+
         neighbors, distances = knn_1(
             data.pos,
             self.k,
@@ -155,6 +171,10 @@ class Inliers(Transform):
         self.update_super = update_super
 
     def _process(self, data):
+        # Robustness: nothing to search on an empty cloud.
+        if data.num_points == 0:
+            return data
+
         # Actual outlier search, optionally recursive
         idx = inliers_split(
             data.pos, data.pos, self.k_min, r_max=self.r_max,
@@ -185,6 +205,10 @@ class Outliers(Transform):
         self.update_super = update_super
 
     def _process(self, data):
+        # Robustness: nothing to search on an empty cloud.
+        if data.num_points == 0:
+            return data
+
         # Actual outlier search, optionally recursive
         idx = outliers_split(
             data.pos, data.pos, self.k_min, r_max=self.r_max,

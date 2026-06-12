@@ -820,6 +820,14 @@ class SPT(nn.Module):
                 # level
                 i_level = i_stage + 1 + self.nano
 
+                # Robustness: a sparse input may yield a hierarchy shallower
+                # than the model's configured number of down-stages. Stop
+                # before indexing a NAG level that does not exist. With sparse
+                # subtile skipping (`min_points_per_subtile`) in place, this
+                # branch is rarely exercised and acts as a defensive guard.
+                if i_level > nag.end_i_level:
+                    break
+
                 # Process handcrafted node and edge features. We need to
                 # do this here before those can be passed to the
                 # DownNFuseStage and, later on, to the UpNFuseStage
