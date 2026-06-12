@@ -1,0 +1,11 @@
+.git
+**/__pycache__
+*.pyc
+logs
+wandb
+data/*/processed
+data/*/raw/*.h5
+media
+notebooks
+docs
+*.ckpt
