@@ -62,7 +62,7 @@ run_in_container() {
       -v "${ORCH_DIR}:${ORCH_DIR}" \
       -e PYTHONUNBUFFERED=1 \
       "${IMAGE_TAG}" \
-      bash -lc "${cmd} 2>&1 | tee -a '${LOG_FILE}'"; then
+      bash -lc "set -o pipefail; ${cmd} 2>&1 | tee -a '${LOG_FILE}'"; then
     return 0
   fi
   return 1

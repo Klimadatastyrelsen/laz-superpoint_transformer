@@ -443,6 +443,58 @@ python src/train.py experiment=panoptic/dales_11g
 NB: Current EZ-SP implementation supports `<dataset>` among `s3dis`, 
 `kitti360` and `dales`.
 
+#### Training on `.laz` / `.las` files
+
+This fork adds first-class support for airborne LiDAR point clouds stored as
+`.laz` / `.las` files (read with [`laspy`](https://laspy.readthedocs.io)), aimed
+at mapping agencies working with national-scale ALS data. A small ready-to-use
+toy dataset is provided to get started.
+
+**1. Get the toy dataset.** The tiles live in the public HuggingFace dataset
+[`rasmuspjohansson/KDS_laz_dataset`](https://huggingface.co/datasets/rasmuspjohansson/KDS_laz_dataset).
+Download the splits expected by `toy_laz_dataset` with:
+
+```bash
+./scripts/download_toy_laz_dataset.sh
+```
+
+This places the tiles under `data/toy_laz_dataset/raw/{train,test}/`. The split
+to tile mapping is defined in
+[`src/datasets/toy_laz_dataset_config.py`](src/datasets/toy_laz_dataset_config.py),
+along with the LAS classification-code → training-id mapping (`ID2TRAINID`).
+
+**2. Train.** Preprocessing (voxelisation, partition, graph construction) runs
+automatically on first use:
+
+```bash
+# Train SPT on the bundled toy .laz dataset
+python src/train.py experiment=semantic/vox025toy_laz_dataset
+
+# Quick smoke run on the 2-tile mini split (single epoch, a few batches)
+python src/train.py experiment=semantic/vox025toy_laz_dataset \
+    datamodule.mini=True logger=csv trainer.max_epochs=1 \
+    +trainer.limit_train_batches=2 +trainer.limit_val_batches=2 test=False
+```
+
+**3. Use your own `.laz` dataset.** Copy
+[`src/datasets/toy_laz_dataset.py`](src/datasets/toy_laz_dataset.py) and
+[`src/datasets/toy_laz_dataset_config.py`](src/datasets/toy_laz_dataset_config.py),
+adjust `TILES` (your train/val/test tile names), `NUM_CLASSES`, `CLASS_NAMES`,
+and `ID2TRAINID` (mapping LAS classification codes to contiguous training ids),
+then add a matching datamodule (see
+[`src/datamodules/toy_laz_dataset.py`](src/datamodules/toy_laz_dataset.py)) and a
+`configs/datamodule/semantic/<name>.yaml` + `configs/experiment/semantic/<name>.yaml`
+pair. Raw tiles are expected under `{data_dir}/raw/{train,val,test}/*.laz`.
+
+**Verify the `.laz` pipeline:**
+
+```bash
+python verify_laz_support_works.py
+```
+
+This runs a short training run on the toy dataset and prints `LAZ_TRAIN_OK` on
+success.
+
 #### EZ-SP
 
 Our EZ-SP method involves a two-stage training. 
