@@ -5,7 +5,6 @@ import torch.nn.functional as F
 import matplotlib.pyplot as plt
 from sklearn.linear_model import RANSACRegressor
 from torch_scatter import scatter_min
-from torch_ransac3d.plane import plane_fit
 
 from src.utils.partition import xy_partition
 from src.utils.point import is_xyz_tensor
@@ -113,54 +112,59 @@ def single_plane_model(pos, random_state=0, residual_threshold=1e-3):
     """
     assert is_xyz_tensor(pos)
 
-    if pos.is_cpu:
-        xy = pos[:, :2].cpu().numpy()
-        z = pos[:, 2].cpu().numpy()
+    # Always fit on CPU with sklearn, even when `pos` lives on CUDA.
+    #
+    # Preprocessing runs GroundElevation on GPU tensors (see DataTo device:
+    # 'cuda' in the datamodule config). The upstream GPU alternative,
+    # torch_ransac3d.plane_fit, silently returns result.equation=None on
+    # degenerate trimmed ground clouds (sparse ALS subtiles, flat water,
+    # near-collinear XY), which crashes with TypeError. sklearn's
+    # RANSACRegressor raises ValueError instead, which we catch and handle.
+    #
+    # This CPU-only approach matches lars-flem/superpoint_transformer_new,
+    # which disabled the GPU path for national-scale LAZ robustness. The
+    # small CPU<->GPU copy cost is negligible next to the rest of
+    # preprocessing.
+    xy = pos[:, :2].cpu().numpy()
+    z = pos[:, 2].cpu().numpy()
 
-        # Search the ground plane using RANSAC. Robustness: on degenerate
-        # ground candidates (e.g. near-collinear XY over flat water), RANSAC
-        # cannot find a valid consensus set and raises ValueError. Fall back
-        # to a flat plane at the mean Z of the candidates rather than crash.
-        try:
-            ransac = RANSACRegressor(
-                random_state=random_state,
-                residual_threshold=residual_threshold).fit(
-                xy, z)
-
-            def predict_elevation(pos_query):
-                assert is_xyz_tensor(pos_query)
-                device = pos_query.device
-                xy = pos_query[:, :2]
-                z = pos_query[:, 2]
-                return z - torch.from_numpy(
-                    ransac.predict(xy.cpu().numpy())).to(device)
-        except ValueError:
-            z_mean = float(z.mean()) if z.size > 0 else 0.0
-            print(
-                f"WARNING: RANSAC could not find a valid consensus set. "
-                f"Falling back to a flat ground plane at z={z_mean:.3f}.")
-
-            def predict_elevation(pos_query):
-                assert is_xyz_tensor(pos_query)
-                return pos_query[:, 2] - z_mean
-
-    else:
-        result = plane_fit(
-            pts=pos,
-            thresh=residual_threshold,
-            max_iterations=100,
-            iterations_per_batch=100,
-            epsilon=1e-8,
-            device=pos.device)
-
-        # result.equation holds: [a, b, c, d] for ax + by + cz + d = 0
-        w = result.equation[:-1]
-        b = result.equation[-1]
+    if z.size < 3:
+        z_mean = float(z.mean()) if z.size > 0 else 0.0
+        print(
+            f"WARNING: Too few ground candidates ({z.size}) for RANSAC. "
+            f"Falling back to a flat ground plane at z={z_mean:.3f}.")
 
         def predict_elevation(pos_query):
             assert is_xyz_tensor(pos_query)
-            delta_z = (torch.matmul(pos_query, w) + b) / w[2]
-            return delta_z
+            return pos_query[:, 2] - z_mean
+
+        return predict_elevation
+
+    # On degenerate ground candidates (e.g. near-collinear XY over flat
+    # water), RANSAC cannot find a valid consensus set and raises
+    # ValueError. Fall back to a flat plane at the mean Z rather than crash.
+    try:
+        ransac = RANSACRegressor(
+            random_state=random_state,
+            residual_threshold=residual_threshold).fit(
+            xy, z)
+
+        def predict_elevation(pos_query):
+            assert is_xyz_tensor(pos_query)
+            device = pos_query.device
+            xy = pos_query[:, :2]
+            z = pos_query[:, 2]
+            return z - torch.from_numpy(
+                ransac.predict(xy.cpu().numpy())).to(device)
+    except ValueError:
+        z_mean = float(z.mean()) if z.size > 0 else 0.0
+        print(
+            f"WARNING: RANSAC could not find a valid consensus set. "
+            f"Falling back to a flat ground plane at z={z_mean:.3f}.")
+
+        def predict_elevation(pos_query):
+            assert is_xyz_tensor(pos_query)
+            return pos_query[:, 2] - z_mean
 
     return predict_elevation
 
