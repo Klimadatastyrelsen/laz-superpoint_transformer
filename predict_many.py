@@ -40,8 +40,8 @@ DEFAULT_CKPT = (
 DEFAULT_CONFIG = "experiment=semantic/vox025toy_laz_dataset"
 
 # Tolerance when comparing to training log metrics (--log). Point-wise LAZ
-# inference can differ slightly from the Lightning test dataloader path.
-LOG_MIOU_TOL = 2.0
+# inference differs from the Lightning test dataloader (tiling, stitching).
+LOG_MIOU_TOL = 5.0
 LOG_OA_TOL = 0.5
 
 
