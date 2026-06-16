@@ -10,12 +10,15 @@ HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 DATA_DIR="${TOY_LAZ_DATA_DIR:-${HERE}/data/toy_laz_dataset/raw}"
 BASE_URL="https://huggingface.co/datasets/rasmuspjohansson/KDS_laz_dataset/resolve/main"
 
-# split/filename pairs required by the toy dataset config.
+# split/filename pairs on disk (dest relative to DATA_DIR).
 TILES=(
   "train/1km_6170_728.laz"
   "train/1km_6171_728.laz"
-  "train/1km_6143_590.laz"   # 'val' split tile, stored under raw/train/
+  "train/1km_6143_589.laz"   # val split tile, stored under raw/train/
+  "train/1km_6172_728.laz"
+  "train/1km_6173_728.laz"
   "test/1km_6147_588.laz"
+  "test/1km_6143_590.laz"
 )
 
 mkdir -p "${DATA_DIR}/train" "${DATA_DIR}/test"
@@ -27,6 +30,7 @@ for tile in "${TILES[@]}"; do
     continue
   fi
   echo "[download_toy_laz_dataset] downloading ${tile}"
+  mkdir -p "$(dirname "${dest}")"
   curl -fL --retry 3 -o "${dest}" "${BASE_URL}/${tile}"
 done
 

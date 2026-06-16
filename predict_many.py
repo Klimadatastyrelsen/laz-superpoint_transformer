@@ -1,417 +1,454 @@
 #!/usr/bin/env python
 """
-Semantic Segmentation Prediction Script
-Processes LAS/LAZ files using pretrained Superpoint Transformer model
+Semantic segmentation inference on toy LAZ tiles (vox025toy_laz_dataset).
+
+Runs the same XY tiling + preprocessing pipeline as training, writes
+classified LAZ files, and optionally reports point-wise metrics.
 """
 
-import os
-import sys
 import argparse
+import os
+import re
+import sys
+import traceback
+from datetime import datetime
+from itertools import product
 from pathlib import Path
+
+import hydra
+import laspy
 import numpy as np
 import torch
-import laspy
-from pyproj import CRS
 
-# Add project root to path (script lives in repo root)
 _project_root = os.path.dirname(os.path.abspath(__file__))
 if _project_root not in sys.path:
     sys.path.insert(0, _project_root)
 
-from src.transforms import SampleRecursiveMainXYAxisTiling, GridSampling3D, SampleXYTiling, NAGRemoveKeys
-from src.data import Data, Batch
-from src.utils.color import to_float_rgb
+from src.datasets.toy_laz_dataset import read_toy_laz_dataset_tile
+from src.datasets.toy_laz_dataset_config import (
+    CLASS_NAMES,
+    ID2TRAINID,
+    TOY_DATASET_NUM_CLASSES,
+)
+from src.metrics.semantic import ConfusionMatrix
+from src.transforms import NAGRemoveKeys, SampleXYTiling, instantiate_datamodule_transforms
 from src.utils import init_config
-import hydra
+
+DEFAULT_CKPT = (
+    "logs/vox025toy_laz_dataset/runs/2026-06-15_12-49-07/checkpoints/last.ckpt"
+)
+DEFAULT_CONFIG = "experiment=semantic/vox025toy_laz_dataset"
+
+# Tolerance when comparing to training log metrics (--log). Point-wise LAZ
+# inference can differ slightly from the Lightning test dataloader path.
+LOG_MIOU_TOL = 2.0
+LOG_OA_TOL = 0.5
 
 
-# ============================================================================
-# Dataset Configuration
-# ============================================================================
+class Tee:
+    """Write to multiple streams (stdout + log file)."""
 
-# Vancouver dataset configuration (default)
-VANCOUVER_NUM_CLASSES = 6
+    def __init__(self, *streams):
+        self.streams = streams
 
-ID2TRAINID = np.asarray([
-    6,  # 0 Not used         -> 6 Ignored
-    5,  # 1 Other            -> 5 Other
-    0,  # 2 Ground           -> 0 Ground
-    3,  # 3 Low vegetation   -> 3 Low vegetation
-    6,  # 4 Unknown / Noise  -> 6 Ignored
-    2,  # 5 High vegetation  -> 2 High vegetation
-    4,  # 6 Building         -> 4 Buildings
-    6,  # 7 Unknown / Noise  -> 6 Ignored
-    6,  # 8 Unknown / Noise  -> 6 Ignored
-    1   # 9 Water            -> 1 Water
-])
+    def write(self, data):
+        for stream in self.streams:
+            stream.write(data)
+            stream.flush()
 
-VANCOUVER_CLASS_NAMES = [
-    'Ground',
-    'Water',
-    'High vegetation',
-    'Low vegetation',
-    'Buildings',
-    'Other',
-    'Ignored'
-]
-
-VANCOUVER_CLASS_COLORS = np.asarray([
-    [243, 214, 171],
-    [169, 222, 249],
-    [ 70, 115,  66],
-    [204, 213, 174],
-    [214,  66,  54],
-    [186, 160, 164],
-    [  0,   0,   0]
-])
+    def flush(self):
+        for stream in self.streams:
+            stream.flush()
 
 
-# ============================================================================
-# Helper Functions
-# ============================================================================
+def setup_run_logging(run_log_path):
+    """Mirror stdout/stderr to run_log_path for later inspection."""
+    run_log_path = Path(run_log_path)
+    run_log_path.parent.mkdir(parents=True, exist_ok=True)
+    log_file = open(run_log_path, "a", encoding="utf-8")
+    log_file.write(f"\n{'=' * 70}\n")
+    log_file.write(f"predict_many run started: {datetime.now().isoformat()}\n")
+    log_file.write(f"{'=' * 70}\n")
+    log_file.flush()
+    sys.stdout = Tee(sys.__stdout__, log_file)
+    sys.stderr = Tee(sys.__stderr__, log_file)
+    return log_file
+
+
+def build_trainid2id(id2trainid, num_classes):
+    """Inverse map: training id -> representative LAS classification code."""
+    trainid2id = np.zeros(num_classes, dtype=np.uint8)
+    for las_id, train_id in enumerate(id2trainid):
+        if 0 <= train_id < num_classes:
+            trainid2id[train_id] = las_id
+    return trainid2id
+
+
+TRAINID2ID = build_trainid2id(ID2TRAINID, TOY_DATASET_NUM_CLASSES)
+
 
 def get_input_files(input_path):
-    """
-    Get list of LAS/LAZ files from input path.
-    
-    Args:
-        input_path: Path to a file or directory
-        
-    Returns:
-        List of Path objects pointing to LAS/LAZ files
-    """
     input_path = Path(input_path)
-    
     if not input_path.exists():
         raise FileNotFoundError(f"Input path does not exist: {input_path}")
-    
+
     if input_path.is_file():
-        if input_path.suffix.lower() in ['.las', '.laz']:
-            return [input_path]
-        else:
-            raise ValueError(f"Input file must be .las or .laz, got: {input_path.suffix}")
-    
-    elif input_path.is_dir():
-        las_files = list(input_path.glob('*.las')) + list(input_path.glob('*.laz'))
-        las_files += list(input_path.glob('*.LAS')) + list(input_path.glob('*.LAZ'))
-        
+        if input_path.suffix.lower() not in {".las", ".laz"}:
+            raise ValueError(
+                f"Input file must be .las or .laz, got: {input_path.suffix}"
+            )
+        return [input_path]
+
+    if input_path.is_dir():
+        las_files = sorted(
+            set(input_path.glob("*.las"))
+            | set(input_path.glob("*.laz"))
+            | set(input_path.glob("*.LAS"))
+            | set(input_path.glob("*.LAZ"))
+        )
         if not las_files:
-            raise ValueError(f"No .las or .laz files found in directory: {input_path}")
-        
-        return sorted(las_files)
-    
+            raise ValueError(f"No .las or .laz files found in: {input_path}")
+        return las_files
+
+    raise ValueError(f"Input path must be a file or directory: {input_path}")
+
+
+def xy_tile_indices(pos, x, y, tiling):
+    """Return point indices for one XY tile (same logic as SampleXYTiling)."""
+    if isinstance(tiling, int):
+        tx, ty = tiling, tiling
     else:
-        raise ValueError(f"Input path must be a file or directory: {input_path}")
+        tx, ty = tiling
+    tiling_t = torch.as_tensor((tx, ty), device=pos.device)
+
+    xy = pos[:, :2].clone().view(-1, 2)
+    xy -= xy.min(dim=0).values.view(1, 2)
+    span = xy.max(dim=0).values.view(1, 2)
+    span = torch.where(span > 0, span, torch.ones_like(span))
+    xy /= span
+    eps = 1e-6
+    xy = xy.clip(min=0, max=1 - eps) * tiling_t.view(1, 2)
+    xy = xy.long()
+    return torch.where((xy[:, 0] == x) & (xy[:, 1] == y))[0]
 
 
-def read_vancouver_tile(
-        filepath,
-        xyz=True,
-        rgb=False,
-        intensity=True,
-        semantic=True,
-        instance=False,
-        remap=True,
-        max_intensity=600):
-    """Read a Vancouver/LAS tile and return a Data object."""
-    data = Data()
-    las = laspy.read(filepath)
-
-    print(f"  Number of points in LAS file: {len(las.points)}")
-
-    # XYZ coordinates
-    if xyz:
-        pos = torch.stack([
-            torch.from_numpy(np.array(las[axis])) for axis in ["X", "Y", "Z"]
-        ], dim=-1)
-        pos *= las.header.scale
-        pos_offset = pos[0]
-        data.pos = (pos - pos_offset).float()
-        data.pos_offset = pos_offset
-
-    # RGB colors
-    if rgb:
-        data.rgb = to_float_rgb(torch.stack([
-            torch.from_numpy(np.array(las[axis], dtype=np.float32) / 65535) 
-            for axis in ["red", "green", "blue"]
-        ], dim=-1))
-
-    # Intensity
-    if intensity:
-        data.intensity = torch.from_numpy(
-            np.array(las['intensity'], dtype=np.float32)
-        ).clip(min=0, max=max_intensity) / max_intensity
-
-    # Semantic labels
-    if semantic:
-        y = torch.LongTensor(las['classification'])
-        if remap:
-            max_class = int(y.max())
-            if max_class >= len(ID2TRAINID):
-                extended = np.full(max_class + 1, fill_value=VANCOUVER_NUM_CLASSES, dtype=np.int64)
-                extended[:len(ID2TRAINID)] = ID2TRAINID
-                mapping = extended
-            else:
-                mapping = ID2TRAINID
-            data.y = torch.from_numpy(mapping)[y]
-        else:
-            data.y = y
-
-    # Instance labels not supported
-    if instance:
-        raise NotImplementedError("The dataset does not contain instance labels.")
-
-    return data
-
-
-def change_classifications(input_file, output_file, new_classifications):
-    """
-    Change classifications in a LAS file and save to new file.
-    
-    Args:
-        input_file: Path to input .las file
-        output_file: Path to save modified .las file
-        new_classifications: New classification array
-    """
-    las = laspy.read(input_file)
-    las.classification = new_classifications
-    
-    # Assign CRS
-    las.header.crs = CRS.from_epsg(7416)
-    las.header.global_encoding.wkt = True
-    
-    las.write(output_file)
+def write_classified_laz(input_file, output_file, las_classifications):
+    """Write LAZ with updated classification, preserving the source header."""
+    las = laspy.read(str(input_file))
+    las.classification = np.asarray(las_classifications, dtype=las.classification.dtype)
+    las.write(str(output_file))
     print(f"  Saved predictions to: {output_file}")
 
 
-def load_dataset_config(config_str):
-    """Load dataset-specific configuration based on config string."""
-    global VANCOUVER_CLASS_COLORS, VANCOUVER_CLASS_NAMES, ID2TRAINID, VANCOUVER_NUM_CLASSES
-    
-    # Check if using KDS configuration
-    if 'kds' in config_str.lower():
-        try:
-            import src.datasets.kds_config as kds_cfg
-            VANCOUVER_CLASS_COLORS = kds_cfg.CLASS_COLORS
-            VANCOUVER_CLASS_NAMES = kds_cfg.CLASS_NAMES
-            ID2TRAINID = kds_cfg.ID2TRAINID
-            VANCOUVER_NUM_CLASSES = kds_cfg.KDS_NUM_CLASSES
-            print(f"  Loaded KDS dataset configuration")
-        except ImportError:
-            print(f"  Warning: Could not import KDS config, using Vancouver config")
-    
-    print(f"  Number of classes: {len(VANCOUVER_CLASS_COLORS)}")
+def compute_metrics(pred_train, gt_train, num_classes):
+    """Point-wise OA / mAcc / mIoU using the project ConfusionMatrix."""
+    pred = torch.as_tensor(pred_train, dtype=torch.long)
+    target = torch.as_tensor(gt_train, dtype=torch.long)
+    valid = (pred >= 0) & (target >= 0) & (target < num_classes)
+    if valid.sum() == 0:
+        return None
+
+    cm = ConfusionMatrix(num_classes)
+    cm.update(pred[valid], target[valid])
+    iou, seen = cm.iou(as_percent=True)
+    return {
+        "oa": cm.oa(as_percent=True),
+        "macc": cm.macc(as_percent=True),
+        "miou": cm.miou(as_percent=True),
+        "iou_per_class": iou.cpu().numpy(),
+        "seen_class": seen.cpu().numpy(),
+        "n_points": int(valid.sum().item()),
+    }
 
 
-# ============================================================================
-# Main Inference Pipeline
-# ============================================================================
+def print_metrics(label, metrics):
+    print(f"\n--- {label} ---")
+    print(f"  Points evaluated: {metrics['n_points']}")
+    print(f"  OA:   {metrics['oa']:.4f}%")
+    print(f"  mAcc: {metrics['macc']:.4f}%")
+    print(f"  mIoU: {metrics['miou']:.4f}%")
+    if "iou_per_class" in metrics and "seen_class" in metrics:
+        for i, name in enumerate(CLASS_NAMES[:TOY_DATASET_NUM_CLASSES]):
+            if i < len(metrics["iou_per_class"]) and metrics["seen_class"][i]:
+                print(f"    IoU {name}: {metrics['iou_per_class'][i]:.4f}%")
 
-def process_file(input_file, output_folder, cfg, transforms_dict, model):
-    """
-    Process a single LAS/LAZ file.
-    
-    Args:
-        input_file: Path to input file
-        output_folder: Path to output directory
-        cfg: Configuration object
-        transforms_dict: Dictionary of transforms
-        model: Pretrained model
-    """
-    print(f"\n{'='*70}")
-    print(f"Processing: {input_file.name}")
-    print(f"{'='*70}")
-    
-    # 1. Read input data
-    print("  Step 1: Reading input data")
-    data = read_vancouver_tile(str(input_file))
-    
-    # 2. Apply pre-transforms
-    print("  Step 2: Applying pre-transforms")
-    nag = transforms_dict['pre_transform'](data)
-    
-    # 3. Simulate dataset I/O behavior
-    print("  Step 3: Simulating dataset I/O")
+
+def parse_training_log(log_path):
+    """Extract test metrics from a training log (Lightning test table)."""
+    text = Path(log_path).read_text(encoding="utf-8", errors="replace")
+    metrics = {}
+    for key in ("test/miou", "test/oa", "test/macc"):
+        match = re.search(rf"\│\s*{re.escape(key)}\s*\│\s*([0-9.eE+-]+)\s*\│", text)
+        if match:
+            metrics[key] = float(match.group(1))
+    return metrics
+
+
+def compare_to_training_log(computed, log_metrics):
+    print(f"\n{'=' * 70}")
+    print("TRAINING LOG COMPARISON")
+    print(f"{'=' * 70}")
+    ok = True
+    checks = [
+        ("test/miou", computed["miou"], LOG_MIOU_TOL),
+        ("test/oa", computed["oa"], LOG_OA_TOL),
+    ]
+    for key, got, tol in checks:
+        if key not in log_metrics:
+            print(f"  SKIP {key}: not found in training log")
+            continue
+        expected = log_metrics[key]
+        diff = abs(got - expected)
+        passed = diff <= tol
+        ok = ok and passed
+        status = "OK" if passed else "FAIL"
+        print(
+            f"  {status} {key}: log={expected:.4f} computed={got:.4f} "
+            f"diff={diff:.4f} (tol={tol})"
+        )
+    if ok:
+        print("LOG_CHECK_OK")
+    else:
+        print("LOG_CHECK_FAIL")
+    return ok
+
+
+def run_tile_inference(data_tile, cfg, transforms_dict, model):
+    """Preprocess one XY subtile and return full-res train-id predictions."""
+    nag = transforms_dict["pre_transform"](data_tile)
     nag = NAGRemoveKeys(
-        level=0, 
-        keys=[k for k in nag[0].keys if k not in cfg.datamodule.point_load_keys]
+        level=0,
+        keys=[k for k in nag[0].keys if k not in cfg.datamodule.point_load_keys],
     )(nag)
     nag = NAGRemoveKeys(
-        level='1+', 
-        keys=[k for k in nag[1].keys if k not in cfg.datamodule.segment_load_keys]
+        level="1+",
+        keys=[k for k in nag[1].keys if k not in cfg.datamodule.segment_load_keys],
     )(nag)
-    
-    # 4. Move to device and apply on-device transforms
-    print("  Step 4: Moving to GPU and applying on-device transforms")
     nag = nag.cuda()
-    nag = transforms_dict['on_device_test_transform'](nag)
-    
-    # 5. Run inference
-    print("  Step 5: Running inference")
+    nag = transforms_dict["on_device_test_transform"](nag)
     with torch.no_grad():
         output = model(nag)
-    
-    # 6. Get full-resolution predictions
-    print("  Step 6: Computing full-resolution predictions")
-    nag[0].semantic_pred = output.voxel_semantic_pred(super_index=nag[0].super_index)
-    
-    raw_semseg_y = output.full_res_semantic_pred(
+    return output.full_res_semantic_pred(
         super_index_level0_to_level1=nag[0].super_index,
-        sub_level0_to_raw=nag[0].sub
+        sub_level0_to_raw=nag[0].sub,
+    ).cpu().long()
+
+
+def process_file(
+    input_file,
+    output_folder,
+    cfg,
+    transforms_dict,
+    model,
+    xy_tiling,
+    get_accuracy=False,
+):
+    """Process one LAZ file with XY tiling and stitch full-cloud predictions."""
+    print(f"\n{'=' * 70}")
+    print(f"Processing: {input_file.name}")
+    print(f"{'=' * 70}")
+
+    print("  Step 1: Reading input LAZ")
+    data_full = read_toy_laz_dataset_tile(
+        str(input_file), semantic=get_accuracy, remap=True
     )
-    
-    # 7. Save results
-    print("  Step 7: Saving results")
+    n_points = data_full.num_points
+    gt_train = data_full.y.cpu().numpy() if get_accuracy and hasattr(data_full, "y") else None
+
+    pred_train = np.full(n_points, -1, dtype=np.int64)
+    if isinstance(xy_tiling, int):
+        tx = ty = xy_tiling
+    else:
+        tx, ty = xy_tiling
+
+    print(f"  Step 2: Tiled inference ({tx}x{ty} subtiles)")
+    for x, y in product(range(tx), range(ty)):
+        idx = xy_tile_indices(data_full.pos, x, y, (tx, ty))
+        if idx.numel() == 0:
+            print(f"    Tile ({x + 1},{y + 1}): empty, skipping")
+            continue
+        data_tile = data_full.select(idx)[0]
+        print(f"    Tile ({x + 1},{y + 1}): {data_tile.num_points} points")
+        tile_pred = run_tile_inference(data_tile, cfg, transforms_dict, model)
+        pred_train[idx.cpu().numpy()] = tile_pred.numpy()
+
+    missing = int((pred_train < 0).sum())
+    if missing:
+        print(f"  Warning: {missing} points have no prediction (kept original class)")
+
+    las = laspy.read(str(input_file))
+    orig_class = np.array(las.classification)
+    out_class = orig_class.copy()
+    predicted_mask = pred_train >= 0
+    out_class[predicted_mask] = TRAINID2ID[pred_train[predicted_mask]]
+
     output_file = output_folder / input_file.name
-    change_classifications(
-        input_file=str(input_file),
-        output_file=str(output_file),
-        new_classifications=raw_semseg_y.cpu()
-    )
-    
-    print(f"  ✓ Successfully processed {input_file.name}")
+    print("  Step 3: Writing classified LAZ")
+    write_classified_laz(input_file, output_file, out_class)
+
+    file_metrics = None
+    if get_accuracy and gt_train is not None:
+        print("  Step 4: Computing accuracy")
+        file_metrics = compute_metrics(pred_train, gt_train, TOY_DATASET_NUM_CLASSES)
+        if file_metrics:
+            print_metrics(input_file.name, file_metrics)
+        else:
+            print("  No valid points for metric computation")
+
+    print(f"  Done: {input_file.name}")
+    return file_metrics
+
+
+def aggregate_metrics(per_file_metrics):
+    """Weighted average of per-file metrics by n_points."""
+    total = sum(m["n_points"] for m in per_file_metrics)
+    if total == 0:
+        return None
+    agg = {
+        "oa": sum(m["oa"] * m["n_points"] for m in per_file_metrics) / total,
+        "macc": sum(m["macc"] * m["n_points"] for m in per_file_metrics) / total,
+        "miou": sum(m["miou"] * m["n_points"] for m in per_file_metrics) / total,
+        "n_points": total,
+    }
+    return agg
 
 
 def main():
-    """Main inference pipeline."""
-    
-    # Parse command line arguments
     parser = argparse.ArgumentParser(
-        description='Semantic segmentation inference on LAS/LAZ files using Superpoint Transformer',
+        description=(
+            "Semantic segmentation inference on toy LAZ tiles "
+            "(vox025toy_laz_dataset checkpoints)"
+        ),
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""
 Examples:
-  # Process a single file
-  python predict.py --inputlaz data/input.las --output_folder results/
-  
-  # Process a directory of files
-  python predict.py --inputlaz data/tiles/ --output_folder results/
-  
-  # Use custom checkpoint and config
-  python predict.py --inputlaz data/ --output_folder results/ \\
-      --ckpt_path models/custom.ckpt \\
-      --config experiment=semantic/custom
-        """
+  python predict_many.py \\
+      --inputlaz data/toy_laz_dataset/raw/test \\
+      --output_folder output/best_test \\
+      --ckpt_path logs/.../epoch_1159.ckpt \\
+      --get_accuracy \\
+      --log logs/docker_train.log \\
+      --run_log logs/predict_best_test.log
+        """,
     )
-    
+    parser.add_argument("--inputlaz", required=True, help="Input .laz file or directory")
+    parser.add_argument("--output_folder", required=True, help="Output directory")
+    parser.add_argument("--ckpt_path", default=DEFAULT_CKPT, help="Model checkpoint")
+    parser.add_argument("--config", default=DEFAULT_CONFIG, help="Hydra experiment")
     parser.add_argument(
-        '--inputlaz',
-        type=str,
-        required=True,
-        help='Path to input LAS/LAZ file or directory containing LAS/LAZ files'
+        "--get_accuracy",
+        action="store_true",
+        help="Compare predictions to GT LAS labels; print OA/mAcc/mIoU",
     )
-    
     parser.add_argument(
-        '--output_folder',
-        type=str,
-        required=True,
-        help='Path to output folder (will be created if it does not exist)'
+        "--log",
+        dest="training_log",
+        default=None,
+        help="Training log to compare test metrics against (with --get_accuracy)",
     )
-    
     parser.add_argument(
-        '--ckpt_path',
-        type=str,
-        default='/home/rajoh/projects/superpoint_transformer/logs/kdsvox025/runs/2025-09-29_17-16-08/checkpoints/last.ckpt',
-        help='Path to model checkpoint file'
+        "--run_log",
+        default=None,
+        help="Append all stdout/stderr to this file (default: <output_folder>/predict_run.log)",
     )
-    
-    parser.add_argument(
-        '--config',
-        type=str,
-        default='experiment=semantic/vox025kds',
-        help='Configuration string for the experiment'
-    )
-    
     args = parser.parse_args()
-    
-    # Print configuration
-    print("="*70)
-    print("SEMANTIC SEGMENTATION INFERENCE")
-    print("="*70)
-    print(f"Input: {args.inputlaz}")
-    print(f"Output folder: {args.output_folder}")
-    print(f"Checkpoint: {args.ckpt_path}")
-    print(f"Config: {args.config}")
-    print("="*70)
-    
-    # Get input files
-    try:
-        input_files = get_input_files(args.inputlaz)
-        print(f"\nFound {len(input_files)} file(s) to process:")
-        for f in input_files:
-            print(f"  - {f.name}")
-    except Exception as e:
-        print(f"Error: {e}")
-        sys.exit(1)
-    
-    # Create output folder
+
     output_folder = Path(args.output_folder)
     output_folder.mkdir(parents=True, exist_ok=True)
-    print(f"\nOutput folder ready: {output_folder}")
-    
-    # Check checkpoint exists
-    if not Path(args.ckpt_path).exists():
-        print(f"Error: Checkpoint file not found: {args.ckpt_path}")
-        sys.exit(1)
-    
-    # Load dataset configuration
-    print(f"\n{'='*70}")
-    print("Loading dataset configuration")
-    print(f"{'='*70}")
-    load_dataset_config(args.config)
-    
-    # Parse configuration
-    print(f"\n{'='*70}")
-    print("Parsing model configuration")
-    print(f"{'='*70}")
-    cfg = init_config(overrides=[args.config, f"datamodule.load_full_res_idx={True}"])
-    print("  Configuration loaded successfully")
-    
-    # Instantiate transforms
-    print(f"\n{'='*70}")
-    print("Instantiating transforms")
-    print(f"{'='*70}")
-    from src.transforms import instantiate_datamodule_transforms
-    transforms_dict = instantiate_datamodule_transforms(cfg.datamodule)
-    print("  Transforms instantiated")
-    
-    # Load model
-    print(f"\n{'='*70}")
-    print("Loading pretrained model")
-    print(f"{'='*70}")
-    model = hydra.utils.instantiate(cfg.model)
-    model = model._load_from_checkpoint(args.ckpt_path)
-    model = model.eval().cuda()
-    print("  Model loaded and set to evaluation mode")
-    
-    # Process all files
-    print(f"\n{'='*70}")
-    print(f"PROCESSING {len(input_files)} FILE(S)")
-    print(f"{'='*70}")
-    
-    successful = 0
-    failed = 0
-    
-    for i, input_file in enumerate(input_files, 1):
-        try:
+    run_log = args.run_log or str(output_folder / "predict_run.log")
+    log_file = setup_run_logging(run_log)
+
+    exit_code = 0
+    try:
+        print("=" * 70)
+        print("TOY LAZ SEMANTIC SEGMENTATION INFERENCE")
+        print("=" * 70)
+        print(f"Input:         {args.inputlaz}")
+        print(f"Output folder: {output_folder}")
+        print(f"Checkpoint:    {args.ckpt_path}")
+        print(f"Config:        {args.config}")
+        print(f"Get accuracy:  {args.get_accuracy}")
+        print(f"Training log:  {args.training_log}")
+        print(f"Run log:       {run_log}")
+        print("=" * 70)
+
+        if not Path(args.ckpt_path).exists():
+            print(f"Error: checkpoint not found: {args.ckpt_path}")
+            sys.exit(1)
+
+        input_files = get_input_files(args.inputlaz)
+        print(f"\nFound {len(input_files)} file(s):")
+        for f in input_files:
+            print(f"  - {f.name}")
+
+        print("\nLoading configuration and model...")
+        cfg = init_config(
+            overrides=[args.config, "datamodule.load_full_res_idx=True"]
+        )
+        xy_tiling = cfg.datamodule.xy_tiling
+        print(f"  xy_tiling: {xy_tiling}")
+
+        transforms_dict = instantiate_datamodule_transforms(cfg.datamodule)
+        model = hydra.utils.instantiate(cfg.model)
+        model = model._load_from_checkpoint(args.ckpt_path)
+        model = model.eval().cuda()
+        print("  Model loaded")
+
+        per_file_metrics = []
+        failed = 0
+        for i, input_file in enumerate(input_files, 1):
             print(f"\n[{i}/{len(input_files)}]", end=" ")
-            process_file(input_file, output_folder, cfg, transforms_dict, model)
-            successful += 1
-        except Exception as e:
-            print(f"  ✗ Error processing {input_file.name}: {e}")
-            failed += 1
-            import traceback
-            traceback.print_exc()
-    
-    # Summary
-    print(f"\n{'='*70}")
-    print("PROCESSING COMPLETE")
-    print(f"{'='*70}")
-    print(f"Successfully processed: {successful}/{len(input_files)} files")
-    if failed > 0:
-        print(f"Failed: {failed}/{len(input_files)} files")
-    print(f"Results saved to: {output_folder}")
-    print(f"{'='*70}")
+            try:
+                m = process_file(
+                    input_file,
+                    output_folder,
+                    cfg,
+                    transforms_dict,
+                    model,
+                    xy_tiling,
+                    get_accuracy=args.get_accuracy,
+                )
+                if m:
+                    per_file_metrics.append(m)
+            except Exception as exc:
+                failed += 1
+                print(f"  Error processing {input_file.name}: {exc}")
+                traceback.print_exc()
+
+        print(f"\n{'=' * 70}")
+        print("SUMMARY")
+        print(f"{'=' * 70}")
+        print(f"Processed: {len(input_files) - failed}/{len(input_files)} files")
+        print(f"Output:    {output_folder}")
+
+        if args.get_accuracy and per_file_metrics:
+            if len(per_file_metrics) > 1:
+                agg = aggregate_metrics(per_file_metrics)
+                print_metrics("AGGREGATE", agg)
+            else:
+                agg = per_file_metrics[0]
+
+            if args.training_log:
+                if not Path(args.training_log).exists():
+                    print(f"Error: training log not found: {args.training_log}")
+                    exit_code = 1
+                else:
+                    log_metrics = parse_training_log(args.training_log)
+                    print(f"\nParsed from training log: {log_metrics}")
+                    if not compare_to_training_log(agg, log_metrics):
+                        exit_code = 1
+
+        if failed:
+            exit_code = 1
+
+    finally:
+        log_file.write(f"\npredict_many finished: {datetime.now().isoformat()}\n")
+        log_file.flush()
+        log_file.close()
+        sys.stdout = sys.__stdout__
+        sys.stderr = sys.__stderr__
+
+    sys.exit(exit_code)
 
 
 if __name__ == "__main__":

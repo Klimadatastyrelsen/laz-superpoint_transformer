@@ -25,13 +25,19 @@ OBJECTS_UNTAR_NAME = "DALESObjects"
 ########################################################################
 
 TILES = {
-    'train': ['1km_6170_728',  '1km_6171_728'],
-     #this one has water that crates areas without points!, '1km_6172_728' '1km_6173_728'],
-    'val': [
-        '1km_6143_590'],
-
+    'train': [
+        '1km_6170_728',
+        '1km_6171_728',
+        '1km_6172_728',
+        '1km_6173_728',
+    ],
+    # Formerly train; includes vehicle class (LAS 172) unlike 6143_590.
+    'val': ['1km_6143_589'],
     'test': [
-        '1km_6147_588']}
+        '1km_6147_588',
+        '1km_6143_590',
+    ],
+}
 
 
 

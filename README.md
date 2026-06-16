@@ -283,6 +283,75 @@ Use your own `.laz` tiles by placing them under
 experiment config at that datamodule (see [Training on `.laz` / `.las`
 files](#training-on-laz--las-files) above).
 
+### Run inference on custom `.laz` files
+
+[`predict_many.py`](predict_many.py) classifies one or more `.laz` files using a
+trained checkpoint (`vox025toy_laz_dataset`). For Docker, mount host directories
+so checkpoints, input tiles, and outputs persist on your machine.
+
+**Prerequisites:** built image `spt_merged:latest`, a `.ckpt` from training, and
+a folder of `.laz` files on the host.
+
+| Host path | Container path | Purpose |
+|-----------|----------------|---------|
+| checkpoint parent dir | `/app/checkpoints` | `.ckpt` file (read-only mount OK) |
+| input file or directory | `/app/input` | source `.laz` tiles |
+| output directory | `/app/output` | classified LAZ + logs |
+| training log dir (optional) | `/app/logs` | only if using `--log` |
+
+**Recommended: wrapper script** (handles mounts, interactive session, logging):
+
+```bash
+./scripts/run_predict_docker.sh \
+  --ckpt logs/vox025toy_laz_dataset/runs/<run>/checkpoints/last.ckpt \
+  --input /path/to/my_laz_tiles \
+  --output /path/to/results
+```
+
+This runs interactively (`docker run -it` when your terminal is a TTY). Output
+appears on screen **and** is saved to:
+
+- `<output>/docker_session.log` — full Docker session (host-side `tee`)
+- `<output>/predict_run.log` — predict_many run log (inside mounted output)
+
+Optional flags forwarded to `predict_many.py`:
+
+- `--get_accuracy` — compare to ground-truth `classification` in the input LAZ
+- `--log /path/to/docker_train.log` — compare test metrics to the training log
+
+**Raw `docker run` example** (same thing without the wrapper):
+
+```bash
+HOST_CKPT_DIR=/path/to/checkpoints
+HOST_INPUT=/path/to/my_laz_tiles
+HOST_OUTPUT=/path/to/results
+CKPT=last.ckpt
+
+mkdir -p "${HOST_OUTPUT}"
+
+docker run --gpus all --rm -it --shm-size=32g \
+  -v "${HOST_CKPT_DIR}:/app/checkpoints:ro" \
+  -v "${HOST_INPUT}:/app/input:ro" \
+  -v "${HOST_OUTPUT}:/app/output" \
+  spt_merged:latest \
+  bash -lc "cd /app && python predict_many.py \
+    --ckpt_path /app/checkpoints/${CKPT} \
+    --inputlaz /app/input \
+    --output_folder /app/output \
+    --run_log /app/output/predict_run.log" \
+  2>&1 | tee -a "${HOST_OUTPUT}/docker_session.log"
+```
+
+Paths passed to `predict_many.py` must be **inside the container** (`/app/...`).
+Large tiles need `--shm-size=32g`.
+
+**Toy-dataset batch evaluation** after training (fixed best/last on toy
+train+test, not for arbitrary folders):
+
+```bash
+./scripts/run_all_predictions.sh
+```
+
 ### Verify the Docker image
 
 [`verify_dockerfile_works.sh`](verify_dockerfile_works.sh) builds the image (unless
@@ -568,6 +637,15 @@ to tile mapping is defined in
 [`src/datasets/toy_laz_dataset_config.py`](src/datasets/toy_laz_dataset_config.py),
 along with the LAS classification-code → training-id mapping (`ID2TRAINID`).
 
+**Train tiles (4):** `1km_6170_728`, `1km_6171_728`, `1km_6172_728`,
+`1km_6173_728`. **Val:** `1km_6143_589` (stored under `raw/train/`; includes
+vehicle class). **Test:** `1km_6147_588`, `1km_6143_590`. Tiles with large
+water regions (`6143_589`, `6172_728`, `6173_728`) are included now that
+preprocessing handles sparse/degenerate subtiles robustly.
+
+To republish tiles to HuggingFace, run `./scripts/upload_toy_laz_dataset.sh`
+(requires write access and a token in `HF_TOKEN` or `my_huggingface_token.txt`).
+
 **2. Train.** Preprocessing (voxelisation, partition, graph construction) runs
 automatically on first use:
 
@@ -599,6 +677,10 @@ python verify_laz_support_works.py
 
 This runs a short training run on the toy dataset and prints `LAZ_TRAIN_OK` on
 success.
+
+For full inference on trained checkpoints (including custom `.laz` folders via
+Docker), see [Run inference on custom `.laz` files](#run-inference-on-custom-laz-files)
+under the Docker section.
 
 #### EZ-SP
 

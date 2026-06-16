@@ -17,8 +17,11 @@ RAW_DIR = os.path.join(REPO_ROOT, "data", "toy_laz_dataset", "raw")
 REQUIRED_TILES = [
     os.path.join("train", "1km_6170_728.laz"),
     os.path.join("train", "1km_6171_728.laz"),
-    os.path.join("train", "1km_6143_590.laz"),
+    os.path.join("train", "1km_6143_589.laz"),
+    os.path.join("train", "1km_6172_728.laz"),
+    os.path.join("train", "1km_6173_728.laz"),
     os.path.join("test", "1km_6147_588.laz"),
+    os.path.join("test", "1km_6143_590.laz"),
 ]
 
 
