@@ -352,6 +352,61 @@ train+test, not for arbitrary folders):
 ./scripts/run_all_predictions.sh
 ```
 
+Checkpoints are auto-detected from the latest run under
+`logs/vox025toy_laz_dataset/runs/*/checkpoints/`. Override with
+`CKPT_DIR=...` or `SPT_IMAGE=...` if needed.
+
+### End-to-end verification (fresh clone)
+
+Reproduce training from scratch: clone the repo, download tiles from
+HuggingFace (no bundled data), train, and evaluate on toy train/test splits.
+
+```bash
+# 1. Clone into a clean directory
+git clone -b laz_merging_repos \
+  https://github.com/Klimadatastyrelsen/laz-superpoint_transformer.git \
+  spt_verification
+cd spt_verification
+
+# 2. Build image and download dataset from HuggingFace
+docker build -t spt_verification:latest .
+mkdir -p data logs
+./scripts/download_toy_laz_dataset.sh   # 7 tiles: 5 train + 2 test
+
+# 3. Optional smoke test (~5 min)
+docker run --gpus all --rm --shm-size=32g \
+  -v "$(pwd)/data:/app/data" -v "$(pwd)/logs:/app/logs" \
+  spt_verification:latest \
+  bash -lc 'cd /app && python verify_laz_support_works.py'
+
+# 4. Full training (1400 epochs, ~90–120 min; preprocessing on first run)
+docker run --gpus all --rm --shm-size=32g \
+  -v "$(pwd)/data:/app/data" \
+  -v "$(pwd)/logs:/app/logs" \
+  spt_verification:latest \
+  bash -lc 'cd /app && python src/train.py experiment=semantic/vox025toy_laz_dataset logger=csv' \
+  2>&1 | tee logs/docker_train.log
+
+# 5. Batch predict + accuracy on train/test (best and last checkpoints)
+SPT_IMAGE=spt_verification:latest ./scripts/run_all_predictions.sh
+```
+
+**Artifacts:**
+
+| Path | Contents |
+|------|----------|
+| `data/toy_laz_dataset/raw/` | Downloaded `.laz` tiles |
+| `data/toy_laz_dataset/processed/` | Preprocessed `.h5` cache (created on first train) |
+| `logs/vox025toy_laz_dataset/runs/<timestamp>/checkpoints/` | `epoch_*.ckpt` (best) and `last.ckpt` |
+| `logs/docker_train.log` | Full training console output |
+| `logs/predict_all_runs.log` | Master log for all four prediction jobs |
+| `output/{best_train,best_test,last_train,last_test}/predict_run.log` | Per-job mIoU/OA |
+
+The train split has **4 tiles** (`6170`, `6171`, `6172`, `6173`); val is
+`6143_589` (under `raw/train/`); test is `6147_588` and `6143_590`. More train
+tiles than the original 2-tile setup improves coverage but increases
+preprocessing and training time.
+
 ### Verify the Docker image
 
 [`verify_dockerfile_works.sh`](verify_dockerfile_works.sh) builds the image (unless
