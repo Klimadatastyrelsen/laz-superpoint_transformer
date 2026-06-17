@@ -195,11 +195,29 @@ The [`Dockerfile`](Dockerfile) builds a self-contained image (Python 3.8, PyTorc
 host folders at runtime so **data**, **logs**, and **checkpoints** persist on
 your machine.
 
-**Prerequisites:** Docker with [NVIDIA Container Toolkit](https://docs.nvidia.com/datacenter/cloud-native/container-toolkit/install-guide.html) (`docker run --gpus all` must work).
+**Prerequisites:** Docker with [NVIDIA Container Toolkit](https://docs.nvidia.com/datacenter/cloud-native/container-toolkit/install-guide.html) (`docker run --gpus all` must work). Pull the pre-built image from Docker Hub **or** build locally (see below).
+
+### Pull the image (Docker Hub)
+
+Pre-built image (same [`Dockerfile`](Dockerfile) as below):
+
+```bash
+docker pull rasmuspjohansson/kds_spt_laz_pytorch:latest
+```
+
+Use it in `docker run` examples and helper scripts via:
+
+```bash
+export SPT_IMAGE=rasmuspjohansson/kds_spt_laz_pytorch:latest
+```
+
+Or replace `spt_merged:latest` with `rasmuspjohansson/kds_spt_laz_pytorch:latest` in
+commands. Dated tags (e.g. `:20260617`) are published for pinning a specific build.
 
 ### Build the image
 
-From the repository root:
+Alternatively, build locally from the repository root (only needed if you modify
+the Dockerfile or prefer a local tag):
 
 ```bash
 docker build -t spt_merged:latest .
@@ -330,32 +348,33 @@ HuggingFace (no bundled data), train, and evaluate on toy train/test splits.
 
 ```bash
 # 1. Clone into a clean directory
-git clone -b laz_merging_repos \
+git clone -b main \
   https://github.com/Klimadatastyrelsen/laz-superpoint_transformer.git \
   spt_verification
 cd spt_verification
 
-# 2. Build image and download dataset from HuggingFace
-docker build -t spt_verification:latest .
+# 2. Pull image (or build locally) and download dataset from HuggingFace
+docker pull rasmuspjohansson/kds_spt_laz_pytorch:latest
+export SPT_IMAGE=rasmuspjohansson/kds_spt_laz_pytorch:latest
 mkdir -p data logs
 ./scripts/download_toy_laz_dataset.sh   # 7 tiles: 5 train + 2 test
 
 # 3. Optional smoke test (~5 min)
 docker run --gpus all --rm --shm-size=32g \
   -v "$(pwd)/data:/app/data" -v "$(pwd)/logs:/app/logs" \
-  spt_verification:latest \
+  "${SPT_IMAGE}" \
   bash -lc 'cd /app && python verify_laz_support_works.py'
 
 # 4. Full training (1400 epochs, ~90–120 min; preprocessing on first run)
 docker run --gpus all --rm --shm-size=32g \
   -v "$(pwd)/data:/app/data" \
   -v "$(pwd)/logs:/app/logs" \
-  spt_verification:latest \
+  "${SPT_IMAGE}" \
   bash -lc 'cd /app && python src/train.py experiment=semantic/vox025toy_laz_dataset logger=csv' \
   2>&1 | tee logs/docker_train.log
 
 # 5. Batch predict + accuracy on train/test (best and last checkpoints)
-SPT_IMAGE=spt_verification:latest ./scripts/run_all_predictions.sh
+SPT_IMAGE="${SPT_IMAGE}" ./scripts/run_all_predictions.sh
 ```
 
 **Artifacts:**
@@ -409,7 +428,7 @@ present and no failure markers appear.
 
 | Variable | Default | Purpose |
 |----------|---------|---------|
-| `SPT_IMAGE` | `spt_merged:latest` | Docker image tag to build or run |
+| `SPT_IMAGE` | `spt_merged:latest` (local build) or `rasmuspjohansson/kds_spt_laz_pytorch:latest` (Docker Hub) | Docker image tag to build or run |
 | `SPT_SKIP_BUILD` | `0` | Set to `1` to skip `docker build` |
 | `SPT_SHM_SIZE` | `32g` | Passed to `docker run --shm-size` |
 | `RUN_LAZ_VERIFY` | `0` | Set to `1` to also run `verify_laz_support_works.py` |
