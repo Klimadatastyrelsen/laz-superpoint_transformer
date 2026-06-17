@@ -25,13 +25,14 @@ OBJECTS_UNTAR_NAME = "DALESObjects"
 ########################################################################
 
 TILES = {
+    # train split includes vehicle class
     'train': [
         '1km_6170_728',
         '1km_6171_728',
         '1km_6172_728',
         '1km_6173_728',
     ],
-    # Formerly train; includes vehicle class (LAS 172) unlike 6143_590.
+    # Val and test tiles does not include vehicle class (LAS 172). TODO: fix this!
     'val': ['1km_6143_589'],
     'test': [
         '1km_6147_588',
