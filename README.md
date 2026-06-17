@@ -1,46 +1,13 @@
 <div align="center">
 
-# Superpoint Transformer
+# Superpoint Transformer with .laz suport
 
-[![python](https://img.shields.io/badge/-Python_3.8+-blue?logo=python&logoColor=white)](https://github.com/pre-commit/pre-commit)
-[![pytorch](https://img.shields.io/badge/PyTorch_2.2+-ee4c2c?logo=pytorch&logoColor=white)](https://pytorch.org/get-started/locally/)
-[![lightning](https://img.shields.io/badge/-Lightning_2.2+-792ee5?logo=pytorchlightning&logoColor=white)](https://pytorchlightning.ai/)
-[![hydra](https://img.shields.io/badge/Config-Hydra_1.3-89b8cd)](https://hydra.cc/)
-[![license](https://img.shields.io/badge/License-MIT-green.svg?labelColor=gray)](https://github.com/ashleve/lightning-hydra-template#license)
+This project is built on [superpoint_transformer](https://github.com/drprojects/superpoint_transformer) with added functionality for handling **.las / .laz** files directly.
+It is used by the danish agency of climate data for processing lidar point clouds.
 
-[//]: # ([![Paper]&#40;https://img.shields.io/badge/paper-arxiv.1001.2234-B31B1B.svg&#41;]&#40;https://www.nature.com/articles/nature14539&#41;)
-[//]: # ([![Conference]&#40;https://img.shields.io/badge/AnyConference-year-4b44ce.svg&#41;]&#40;https://papers.nips.cc/paper/2020&#41;)
+Please have a look at the original project in order to learn more.
 
-
-Official implementation for
-<br>
-<br>
-[_Efficient 3D Semantic Segmentation with Superpoint Transformer_](https://arxiv.org/abs/2306.08045) (ICCV'23)
-<br>
-[![arXiv](https://img.shields.io/badge/arxiv-2306.08045-b31b1b.svg)](https://arxiv.org/abs/2306.08045)
-[![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.8042712.svg)](https://doi.org/10.5281/zenodo.8042712)
-[![Project page](https://img.shields.io/badge/Project_page-8A2BE2)](https://drprojects.github.io/superpoint-transformer-site)
-[![Tutorial](https://img.shields.io/badge/Tutorial-FFC300)](https://www.youtube.com/watch?v=2qKhpQs9gJw)
-<br>
-<br>
-[_Scalable 3D Panoptic Segmentation As Superpoint Graph Clustering_](https://arxiv.org/abs/2401.06704) (3DV'24 Oral)
-<br>
-[![arXiv](https://img.shields.io/badge/arxiv-2401.06704-b31b1b.svg)](https://arxiv.org/abs/2401.06704)
-[![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.10689037.svg)](https://doi.org/10.5281/zenodo.10689037)
-[![Project page](https://img.shields.io/badge/Project_page-8A2BE2)](https://drprojects.github.io/supercluster-site)
-<br>
-<br>
-[_EZ-SP: Fast and Lightweight Superpoint-Based 3D Segmentation_](https://arxiv.org/abs/2512.00385) (ICRA'26)
-<br>
-[![arXiv](https://img.shields.io/badge/arxiv-2512.00385-b31b1b.svg)](https://arxiv.org/abs/2512.00385)
-[![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.18329602.svg)](https://doi.org/10.5281/zenodo.18329602)
-[![Project page](https://img.shields.io/badge/Project_page-8A2BE2)](https://louisgeist.github.io/ez-sp/)
-<br>
-<br>
-**If you ❤️ or simply use this project, don't forget to give the repository a ⭐,
-it means a lot to us !**
-<br>
-</div>
+In order to use the .laz suport in this repo, build the docker image as documented below and search for .laz in order to find how to train and predict. 
 
 
 <br>
