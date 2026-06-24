@@ -52,8 +52,9 @@ done
 
 CKPT="$(readlink -f "${CKPT}")"
 INPUT="$(readlink -f "${INPUT}")"
-OUTPUT="$(readlink -f "${OUTPUT}")"
+# OUTPUT may not exist yet; readlink -f fails on missing paths (set -e exits silently).
 mkdir -p "${OUTPUT}"
+OUTPUT="$(readlink -f "${OUTPUT}")"
 
 if [[ -n "${TRAINING_LOG}" ]]; then
   TRAINING_LOG="$(readlink -f "${TRAINING_LOG}")"
