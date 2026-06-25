@@ -44,6 +44,13 @@ DEFAULT_CONFIG = "experiment=semantic/vox025toy_laz_dataset"
 LOG_MIOU_TOL = 5.0
 LOG_OA_TOL = 0.5
 
+# Output LAZ layout. "native" mirrors the input (extra bytes, VLRs, etc.).
+# "standard" writes LAS 1.4 point format 6 with 30-byte records (no vendor
+# extra dimensions) so FugroViewer / QGIS Untwine can open the result.
+OUTPUT_FORMATS = ("native", "standard")
+STANDARD_POINT_FORMAT = 6
+STANDARD_FILE_VERSION = "1.4"
+
 
 class Tee:
     """Write to multiple streams (stdout + log file)."""
@@ -132,12 +139,82 @@ def xy_tile_indices(pos, x, y, tiling):
     return torch.where((xy[:, 0] == x) & (xy[:, 1] == y))[0]
 
 
-def write_classified_laz(input_file, output_file, las_classifications):
-    """Write LAZ with updated classification, preserving the source header."""
+def summarize_laz_header(las):
+    """One-line summary of LAS/LAZ layout for logging."""
+    h = las.header
+    std_dims = {
+        "X", "Y", "Z", "intensity", "return_number", "number_of_returns",
+        "synthetic", "key_point", "withheld", "overlap", "scanner_channel",
+        "scan_direction_flag", "edge_of_flight_line", "classification",
+        "user_data", "scan_angle", "point_source_id", "gps_time",
+        "red", "green", "blue",
+    }
+    extra = [d for d in h.point_format.dimension_names if d not in std_dims]
+    try:
+        crs = h.parse_crs()
+        crs_label = crs.to_epsg() if crs else None
+    except Exception:
+        crs_label = "unparsed"
+    return (
+        f"version={h.version} pf={h.point_format.id} "
+        f"record_len={h.point_format.size} points={h.point_count} "
+        f"vlrs={len(h.vlrs)} extra_dims={extra or 'none'} crs={crs_label}"
+    )
+
+
+def _write_native_laz(las, output_file, las_classifications):
+    las.classification = np.asarray(
+        las_classifications, dtype=las.classification.dtype
+    )
+    las.write(str(output_file), do_compress=True)
+
+
+def _write_standard_laz(las, output_file, las_classifications):
+    """LAS 1.4 pf 6 with 30-byte records; drops vendor extra bytes."""
+    out = laspy.create(
+        point_format=STANDARD_POINT_FORMAT,
+        file_version=STANDARD_FILE_VERSION,
+    )
+    out.header.scales = las.header.scales
+    out.header.offsets = las.header.offsets
+    out.header.global_encoding = las.header.global_encoding
+    for vlr in las.header.vlrs:
+        out.header.vlrs.append(vlr)
+
+    for dim in out.point_format.dimension_names:
+        if dim in las.point_format.dimension_names:
+            out[dim] = np.array(las[dim])
+
+    out.classification = np.asarray(
+        las_classifications, dtype=out.classification.dtype
+    )
+    out.write(str(output_file), do_compress=True)
+
+
+def write_classified_laz(
+    input_file, output_file, las_classifications, output_format="native"
+):
+    """Write LAZ with updated classification.
+
+    :param output_format: "native" preserves the input layout; "standard"
+        normalises to LAS 1.4 point format 6 without vendor extra bytes.
+    """
+    if output_format not in OUTPUT_FORMATS:
+        raise ValueError(
+            f"output_format must be one of {OUTPUT_FORMATS}, got {output_format!r}"
+        )
+
     las = laspy.read(str(input_file))
-    las.classification = np.asarray(las_classifications, dtype=las.classification.dtype)
-    las.write(str(output_file))
-    print(f"  Saved predictions to: {output_file}")
+    print(f"  Input layout: {summarize_laz_header(las)}")
+
+    if output_format == "native":
+        _write_native_laz(las, output_file, las_classifications)
+    else:
+        _write_standard_laz(las, output_file, las_classifications)
+        written = laspy.read(str(output_file))
+        print(f"  Output layout: {summarize_laz_header(written)}")
+
+    print(f"  Saved predictions to: {output_file} ({output_format})")
 
 
 def compute_metrics(pred_train, gt_train, num_classes):
@@ -242,6 +319,7 @@ def process_file(
     model,
     xy_tiling,
     get_accuracy=False,
+    output_format="native",
 ):
     """Process one LAZ file with XY tiling and stitch full-cloud predictions."""
     print(f"\n{'=' * 70}")
@@ -283,8 +361,10 @@ def process_file(
     out_class[predicted_mask] = TRAINID2ID[pred_train[predicted_mask]]
 
     output_file = output_folder / input_file.name
-    print("  Step 3: Writing classified LAZ")
-    write_classified_laz(input_file, output_file, out_class)
+    print(f"  Step 3: Writing classified LAZ (output_format={output_format})")
+    write_classified_laz(
+        input_file, output_file, out_class, output_format=output_format
+    )
 
     file_metrics = None
     if get_accuracy and gt_train is not None:
@@ -351,6 +431,16 @@ Examples:
         default=None,
         help="Append all stdout/stderr to this file (default: <output_folder>/predict_run.log)",
     )
+    parser.add_argument(
+        "--output_format",
+        choices=OUTPUT_FORMATS,
+        default="standard",
+        help=(
+            "Output LAZ layout: 'standard' (default) = LAS 1.4 pf 6, 30-byte "
+            "records, no vendor extra bytes (FugroViewer/QGIS friendly); "
+            "'native' = preserve input layout including extra bytes"
+        ),
+    )
     args = parser.parse_args()
 
     output_folder = Path(args.output_folder)
@@ -370,6 +460,7 @@ Examples:
         print(f"Get accuracy:  {args.get_accuracy}")
         print(f"Training log:  {args.training_log}")
         print(f"Run log:       {run_log}")
+        print(f"Output format: {args.output_format}")
         print("=" * 70)
 
         if not Path(args.ckpt_path).exists():
@@ -407,6 +498,7 @@ Examples:
                     model,
                     xy_tiling,
                     get_accuracy=args.get_accuracy,
+                    output_format=args.output_format,
                 )
                 if m:
                     per_file_metrics.append(m)

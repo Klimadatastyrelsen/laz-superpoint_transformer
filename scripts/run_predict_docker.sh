@@ -25,6 +25,7 @@ OUTPUT=""
 TRAINING_LOG=""
 SESSION_LOG=""
 GET_ACCURACY=0
+OUTPUT_FORMAT="${PREDICT_OUTPUT_FORMAT:-standard}"
 
 usage() {
   sed -n '2,20p' "$0" | sed 's/^# \{0,1\}//'
@@ -41,6 +42,7 @@ while [[ $# -gt 0 ]]; do
     --config) CONFIG="$2"; shift 2 ;;
     --image) IMAGE="$2"; shift 2 ;;
     --get_accuracy) GET_ACCURACY=1; shift ;;
+    --output_format) OUTPUT_FORMAT="$2"; shift 2 ;;
     -h|--help) usage 0 ;;
     *) echo "Unknown argument: $1" >&2; usage 1 ;;
   esac
@@ -88,7 +90,7 @@ MOUNTS=(
   -v "${OUTPUT}:${CONTAINER_OUTPUT}"
 )
 
-EXTRA_ARGS=()
+EXTRA_ARGS=(--output_format "${OUTPUT_FORMAT}")
 if [[ "${GET_ACCURACY}" == "1" ]]; then
   EXTRA_ARGS+=(--get_accuracy)
 fi
@@ -124,6 +126,7 @@ echo "Output:       ${OUTPUT}"
 echo "Session log:  ${SESSION_LOG}"
 echo "Run log:      ${OUTPUT}/predict_run.log"
 echo "Get accuracy: ${GET_ACCURACY}"
+echo "Output format: ${OUTPUT_FORMAT}"
 echo "Training log: ${TRAINING_LOG:-<none>}"
 echo "======================================================================"
 
