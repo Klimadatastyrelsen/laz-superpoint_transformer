@@ -34,9 +34,7 @@ from src.metrics.semantic import ConfusionMatrix
 from src.transforms import NAGRemoveKeys, SampleXYTiling, instantiate_datamodule_transforms
 from src.utils import init_config
 
-DEFAULT_CKPT = (
-    "logs/vox025toy_laz_dataset/runs/2026-06-15_12-49-07/checkpoints/last.ckpt"
-)
+DEFAULT_CKPT = "checkpoints/vox025toy_laz_best.ckpt"
 DEFAULT_CONFIG = "experiment=semantic/vox025toy_laz_dataset"
 
 # Tolerance when comparing to training log metrics (--log). Point-wise LAZ

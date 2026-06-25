@@ -252,6 +252,53 @@ docker push rasmuspjohansson/kds_spt_laz_pytorch:20260617
 
 Replace `rasmuspjohansson` with your Docker Hub username when publishing a fork.
 
+### Download pretrained model (Hugging Face)
+
+The best `vox025toy_laz_dataset` checkpoint is published on Hugging Face at
+[`rasmuspjohansson/KDS_spt_laz`](https://huggingface.co/rasmuspjohansson/KDS_spt_laz).
+Download it into `checkpoints/` (no token required for the public repo):
+
+```bash
+./scripts/download_model.sh
+# → checkpoints/vox025toy_laz_best.ckpt
+```
+
+Use it with [`predict_many.py`](predict_many.py) or the Docker wrapper:
+
+```bash
+python predict_many.py \
+  --ckpt_path checkpoints/vox025toy_laz_best.ckpt \
+  --inputlaz /path/to/tiles \
+  --output_folder /path/to/results
+
+./scripts/run_predict_docker.sh \
+  --ckpt checkpoints/vox025toy_laz_best.ckpt \
+  --input /path/to/tiles \
+  --output /path/to/results
+```
+
+### Publish model to Hugging Face
+
+Maintainers: after training a new best checkpoint, upload it to Hugging Face.
+Requires `pip install huggingface_hub` and a write token in `HF_TOKEN`,
+`HF_TOKEN_FILE`, `hftoken_write.txt` (repo root), or `my_huggingface_token.txt`
+(at the orchestrator / sibling-repo parent directory).
+
+**Script** (uploads checkpoint as `vox025toy_laz_best.ckpt` plus model card):
+
+```bash
+CKPT_PATH=/path/to/epoch_909.ckpt ./scripts/upload_model.sh
+```
+
+**Manual equivalent:**
+
+```bash
+hf upload rasmuspjohansson/KDS_spt_laz /path/to/epoch_909.ckpt vox025toy_laz_best.ckpt --repo-type model
+hf upload rasmuspjohansson/KDS_spt_laz scripts/KDS_spt_model_README.md README.md --repo-type model
+```
+
+Replace `rasmuspjohansson` with your Hugging Face username when publishing a fork.
+
 ### Run `.laz` training with local data and outputs
 
 Create host directories for the toy dataset and training outputs, then mount
@@ -301,7 +348,8 @@ trained checkpoint (`vox025toy_laz_dataset`). For Docker, mount host directories
 so checkpoints, input tiles, and outputs persist on your machine.
 
 **Prerequisites:** image `kds_spt_laz_pytorch:latest` (pull or build), a `.ckpt`
-from training, and a folder of `.laz` files on the host.
+file (download with `./scripts/download_model.sh` or use your own training
+checkpoint), and a folder of `.laz` files on the host.
 
 | Host path | Container path | Purpose |
 |-----------|----------------|---------|
@@ -311,6 +359,17 @@ from training, and a folder of `.laz` files on the host.
 | training log dir (optional) | `/app/logs` | only if using `--log` |
 
 **Recommended: wrapper script** (handles mounts, interactive session, logging):
+
+```bash
+./scripts/download_model.sh   # if you have not trained locally
+
+./scripts/run_predict_docker.sh \
+  --ckpt checkpoints/vox025toy_laz_best.ckpt \
+  --input /path/to/my_laz_tiles \
+  --output /path/to/results
+```
+
+Or with a checkpoint from your own training run:
 
 ```bash
 ./scripts/run_predict_docker.sh \
@@ -712,6 +771,18 @@ preprocessing handles sparse/degenerate subtiles robustly.
 
 To republish tiles to HuggingFace, run `./scripts/upload_toy_laz_dataset.sh`
 (requires write access and a token in `HF_TOKEN` or `my_huggingface_token.txt`).
+
+**1b. Get the pretrained model (optional).** Skip training and download the
+published best checkpoint from
+[`rasmuspjohansson/KDS_spt_laz`](https://huggingface.co/rasmuspjohansson/KDS_spt_laz):
+
+```bash
+./scripts/download_model.sh
+```
+
+This places `checkpoints/vox025toy_laz_best.ckpt`, used by default in
+[`predict_many.py`](predict_many.py). To republish an updated checkpoint, see
+[Publish model to Hugging Face](#publish-model-to-hugging-face) under Docker.
 
 **2. Train.** Preprocessing (voxelisation, partition, graph construction) runs
 automatically on first use:

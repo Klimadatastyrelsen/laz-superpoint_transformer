@@ -20,19 +20,36 @@ MASTER_LOG="${HERE}/logs/predict_all_runs.log"
 TRAIN_LOG="logs/docker_train.log"
 
 RUNS_GLOB="logs/vox025toy_laz_dataset/runs/*/checkpoints"
+HF_BEST_CKPT="${HERE}/checkpoints/vox025toy_laz_best.ckpt"
 CKPT_DIR="${CKPT_DIR:-$(ls -td ${RUNS_GLOB} 2>/dev/null | head -1)}"
-BEST_CKPT="$(find "${CKPT_DIR}" -maxdepth 1 -name 'epoch_*.ckpt' 2>/dev/null | head -1)"
-LAST_CKPT="${CKPT_DIR}/last.ckpt"
+BEST_CKPT=""
+LAST_CKPT=""
+USE_HF_FALLBACK=0
+EXTRA_MOUNTS=()
 
-if [[ -z "${CKPT_DIR}" || ! -d "${CKPT_DIR}" ]]; then
-  echo "[run_all_predictions] No checkpoint directory found under ${RUNS_GLOB}" >&2
-  exit 1
+if [[ -n "${CKPT_DIR}" && -d "${CKPT_DIR}" ]]; then
+  BEST_CKPT="$(find "${CKPT_DIR}" -maxdepth 1 -name 'epoch_*.ckpt' 2>/dev/null | head -1)"
+  LAST_CKPT="${CKPT_DIR}/last.ckpt"
 fi
+
 if [[ -z "${BEST_CKPT}" || ! -f "${BEST_CKPT}" ]]; then
-  echo "[run_all_predictions] No best checkpoint (epoch_*.ckpt) in ${CKPT_DIR}" >&2
-  exit 1
+  if [[ -s "${HF_BEST_CKPT}" ]]; then
+    BEST_CKPT="checkpoints/vox025toy_laz_best.ckpt"
+    USE_HF_FALLBACK=1
+    EXTRA_MOUNTS=(-v "${HERE}/checkpoints:/app/checkpoints:ro")
+    echo "[run_all_predictions] using HuggingFace checkpoint: ${HF_BEST_CKPT}"
+  else
+    echo "[run_all_predictions] No best checkpoint under ${RUNS_GLOB}" >&2
+    echo "[run_all_predictions] Run ./scripts/download_model.sh or train locally first." >&2
+    exit 1
+  fi
 fi
-if [[ ! -f "${LAST_CKPT}" ]]; then
+
+if [[ "${USE_HF_FALLBACK}" == "1" ]]; then
+  if [[ ! -f "${LAST_CKPT}" ]]; then
+    echo "[run_all_predictions] last.ckpt unavailable without local training; skipping last_* jobs"
+  fi
+elif [[ ! -f "${LAST_CKPT}" ]]; then
   echo "[run_all_predictions] Missing last.ckpt in ${CKPT_DIR}" >&2
   exit 1
 fi
@@ -52,6 +69,7 @@ run_job() {
     -v "${HERE}/data:/app/data" \
     -v "${HERE}/output:/app/output" \
     -v "${HERE}/logs:/app/logs" \
+    "${EXTRA_MOUNTS[@]}" \
     -e PYTHONUNBUFFERED=1 \
     -e WANDB_MODE=disabled \
     "${IMAGE}" \
@@ -70,8 +88,10 @@ rc=0
 
   run_job best_train "${BEST_CKPT}" data/toy_laz_dataset/raw/train output/best_train || rc=1
   run_job best_test  "${BEST_CKPT}" data/toy_laz_dataset/raw/test  output/best_test  "--log ${TRAIN_LOG}" || rc=1
-  run_job last_train "${LAST_CKPT}" data/toy_laz_dataset/raw/train output/last_train || rc=1
-  run_job last_test  "${LAST_CKPT}" data/toy_laz_dataset/raw/test  output/last_test || rc=1
+  if [[ -f "${LAST_CKPT}" ]]; then
+    run_job last_train "${LAST_CKPT}" data/toy_laz_dataset/raw/train output/last_train || rc=1
+    run_job last_test  "${LAST_CKPT}" data/toy_laz_dataset/raw/test  output/last_test || rc=1
+  fi
 
   echo "predict_all_runs finished: $(date -Iseconds) exit=${rc}"
   exit "${rc}"
