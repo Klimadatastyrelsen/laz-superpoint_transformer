@@ -4,14 +4,16 @@
 # writes output/<dir>/predict_run.log via predict_many.py --run_log.
 #
 # Override checkpoint dir: CKPT_DIR=logs/.../checkpoints ./scripts/run_all_predictions.sh
-# Override image: SPT_IMAGE=spt_verification:latest ./scripts/run_all_predictions.sh
+# Override image: SPT_IMAGE=kds_spt_laz_pytorch:20260617 ./scripts/run_all_predictions.sh
 
 set -uo pipefail
 
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "${HERE}"
 
-IMAGE="${SPT_IMAGE:-spt_merged:latest}"
+# shellcheck source=scripts/docker_defaults.sh
+source "${HERE}/scripts/docker_defaults.sh"
+IMAGE="${SPT_IMAGE}"
 SHM_SIZE="${SPT_SHM_SIZE:-32g}"
 mkdir -p output logs
 MASTER_LOG="${HERE}/logs/predict_all_runs.log"

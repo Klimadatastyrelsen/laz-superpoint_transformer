@@ -199,32 +199,58 @@ your machine.
 
 ### Pull the image (Docker Hub)
 
-Pre-built image (same [`Dockerfile`](Dockerfile) as below):
+Download the official pre-built image and tag it locally as `kds_spt_laz_pytorch:latest`:
 
 ```bash
-docker pull rasmuspjohansson/kds_spt_laz_pytorch:latest
+./scripts/docker_pull.sh
 ```
 
-Use it in `docker run` examples and helper scripts via:
+This pulls from Docker Hub and retags to the local name used by all helper scripts.
+To pin a specific release on the hub:
 
 ```bash
-export SPT_IMAGE=rasmuspjohansson/kds_spt_laz_pytorch:latest
+SPT_IMAGE_HUB=rasmuspjohansson/kds_spt_laz_pytorch:20260617 ./scripts/docker_pull.sh
 ```
-
-Or replace `spt_merged:latest` with `rasmuspjohansson/kds_spt_laz_pytorch:latest` in
-commands. Dated tags (e.g. `:20260617`) are published for pinning a specific build.
 
 ### Build the image
 
-Alternatively, build locally from the repository root (only needed if you modify
-the Dockerfile or prefer a local tag):
+Build locally from the repository root (only needed if you modify the
+Dockerfile or prefer a local build):
 
 ```bash
-docker build -t spt_merged:latest .
+./scripts/docker_build.sh
 ```
 
-The first build can take a while (FRNN is compiled from source). Override the
-tag with `SPT_IMAGE` when using the verification script (see below).
+Or equivalently:
+
+```bash
+docker build -t kds_spt_laz_pytorch:latest .
+```
+
+The first build can take a while (FRNN is compiled from source). All helper
+scripts use `kds_spt_laz_pytorch:latest` by default via
+[`scripts/docker_defaults.sh`](scripts/docker_defaults.sh). Override with
+`SPT_IMAGE` if needed.
+
+### Publish to Docker Hub
+
+Maintainers: after building locally and `docker login`, tag and push to your
+Docker Hub namespace. Example (official project image):
+
+```bash
+./scripts/docker_build.sh
+docker tag kds_spt_laz_pytorch:latest rasmuspjohansson/kds_spt_laz_pytorch:latest
+docker push rasmuspjohansson/kds_spt_laz_pytorch:latest
+```
+
+Dated release tag:
+
+```bash
+docker tag kds_spt_laz_pytorch:latest rasmuspjohansson/kds_spt_laz_pytorch:20260617
+docker push rasmuspjohansson/kds_spt_laz_pytorch:20260617
+```
+
+Replace `rasmuspjohansson` with your Docker Hub username when publishing a fork.
 
 ### Run `.laz` training with local data and outputs
 
@@ -242,7 +268,7 @@ docker run --gpus all --rm -it \
   --shm-size=32g \
   -v "$(pwd)/data:/app/data" \
   -v "$(pwd)/logs:/app/logs" \
-  spt_merged:latest \
+  kds_spt_laz_pytorch:latest \
   bash -lc 'cd /app && python src/train.py experiment=semantic/vox025toy_laz_dataset logger=csv'
 ```
 
@@ -259,7 +285,7 @@ docker run --gpus all --rm \
   --shm-size=32g \
   -v "$(pwd)/data:/app/data" \
   -v "$(pwd)/logs:/app/logs" \
-  spt_merged:latest \
+  kds_spt_laz_pytorch:latest \
   bash -lc 'cd /app && python verify_laz_support_works.py'
 ```
 
@@ -274,8 +300,8 @@ files](#training-on-laz--las-files) above).
 trained checkpoint (`vox025toy_laz_dataset`). For Docker, mount host directories
 so checkpoints, input tiles, and outputs persist on your machine.
 
-**Prerequisites:** built image `spt_merged:latest`, a `.ckpt` from training, and
-a folder of `.laz` files on the host.
+**Prerequisites:** image `kds_spt_laz_pytorch:latest` (pull or build), a `.ckpt`
+from training, and a folder of `.laz` files on the host.
 
 | Host path | Container path | Purpose |
 |-----------|----------------|---------|
@@ -318,7 +344,7 @@ docker run --gpus all --rm -it --shm-size=32g \
   -v "${HOST_CKPT_DIR}:/app/checkpoints:ro" \
   -v "${HOST_INPUT}:/app/input:ro" \
   -v "${HOST_OUTPUT}:/app/output" \
-  spt_merged:latest \
+  kds_spt_laz_pytorch:latest \
   bash -lc "cd /app && python predict_many.py \
     --ckpt_path /app/checkpoints/${CKPT} \
     --inputlaz /app/input \
@@ -354,27 +380,26 @@ git clone -b main \
 cd spt_verification
 
 # 2. Pull image (or build locally) and download dataset from HuggingFace
-docker pull rasmuspjohansson/kds_spt_laz_pytorch:latest
-export SPT_IMAGE=rasmuspjohansson/kds_spt_laz_pytorch:latest
+./scripts/docker_pull.sh
 mkdir -p data logs
 ./scripts/download_toy_laz_dataset.sh   # 7 tiles: 5 train + 2 test
 
 # 3. Optional smoke test (~5 min)
 docker run --gpus all --rm --shm-size=32g \
   -v "$(pwd)/data:/app/data" -v "$(pwd)/logs:/app/logs" \
-  "${SPT_IMAGE}" \
+  kds_spt_laz_pytorch:latest \
   bash -lc 'cd /app && python verify_laz_support_works.py'
 
 # 4. Full training (1400 epochs, ~90–120 min; preprocessing on first run)
 docker run --gpus all --rm --shm-size=32g \
   -v "$(pwd)/data:/app/data" \
   -v "$(pwd)/logs:/app/logs" \
-  "${SPT_IMAGE}" \
+  kds_spt_laz_pytorch:latest \
   bash -lc 'cd /app && python src/train.py experiment=semantic/vox025toy_laz_dataset logger=csv' \
   2>&1 | tee logs/docker_train.log
 
 # 5. Batch predict + accuracy on train/test (best and last checkpoints)
-SPT_IMAGE="${SPT_IMAGE}" ./scripts/run_all_predictions.sh
+./scripts/run_all_predictions.sh
 ```
 
 **Artifacts:**
@@ -411,8 +436,8 @@ RUN_LAZ_VERIFY=1 ./verify_dockerfile_works.sh
 # Re-use an existing image (skip docker build)
 SPT_SKIP_BUILD=1 ./verify_dockerfile_works.sh
 
-# Custom image tag or log location
-SPT_IMAGE=myregistry/spt:v1 LAZ_LOG_DIR=/tmp/spt_logs ./verify_dockerfile_works.sh
+# Pin a dated local tag instead of latest
+SPT_IMAGE=kds_spt_laz_pytorch:20260617 LAZ_LOG_DIR=/tmp/spt_logs ./verify_dockerfile_works.sh
 ```
 
 After a run, grep the log for pass/fail markers:
@@ -428,7 +453,8 @@ present and no failure markers appear.
 
 | Variable | Default | Purpose |
 |----------|---------|---------|
-| `SPT_IMAGE` | `spt_merged:latest` (local build) or `rasmuspjohansson/kds_spt_laz_pytorch:latest` (Docker Hub) | Docker image tag to build or run |
+| `SPT_IMAGE` | `kds_spt_laz_pytorch:latest` | Local image for build / run / verify |
+| `SPT_IMAGE_HUB` | `rasmuspjohansson/kds_spt_laz_pytorch:latest` | Remote source for `docker_pull.sh` only |
 | `SPT_SKIP_BUILD` | `0` | Set to `1` to skip `docker build` |
 | `SPT_SHM_SIZE` | `32g` | Passed to `docker run --shm-size` |
 | `RUN_LAZ_VERIFY` | `0` | Set to `1` to also run `verify_laz_support_works.py` |

@@ -15,7 +15,9 @@
 set -euo pipefail
 
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-IMAGE="${SPT_IMAGE:-spt_merged:latest}"
+# shellcheck source=scripts/docker_defaults.sh
+source "${HERE}/scripts/docker_defaults.sh"
+IMAGE="${SPT_IMAGE}"
 SHM_SIZE="${SPT_SHM_SIZE:-32g}"
 CONFIG="${PREDICT_CONFIG:-experiment=semantic/vox025toy_laz_dataset}"
 

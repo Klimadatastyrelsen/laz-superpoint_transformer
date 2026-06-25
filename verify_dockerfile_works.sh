@@ -9,11 +9,14 @@ set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
+# shellcheck source=scripts/docker_defaults.sh
+source "${SCRIPT_DIR}/scripts/docker_defaults.sh"
+
 # Directory that receives the log file. Defaults to the repo's own logs/ dir.
 LOG_DIR="${LAZ_LOG_DIR:-${SCRIPT_DIR}/logs}"
 LOG_FILE="${LOG_DIR}/laz_logs.txt"
 
-IMAGE_TAG="${SPT_IMAGE:-spt_merged:latest}"
+IMAGE_TAG="${SPT_IMAGE}"
 SKIP_BUILD="${SPT_SKIP_BUILD:-0}"
 SHM_SIZE="${SPT_SHM_SIZE:-32g}"
 # Set RUN_LAZ_VERIFY=1 to also run the .laz training verification (phase 2+).
