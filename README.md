@@ -7,7 +7,7 @@ It is used by the danish agency of climate data for processing lidar point cloud
 
 Please have a look at the original project in order to learn more.
 
-In order to use the .laz suport in this repo, build the docker image as documented below and search for .laz in order to find how to train and predict. 
+In order to use the .laz suport in this repo, build the docker image as documented below and search for .laz in this README in order to find how to train and predict. 
 
 
 <br>
