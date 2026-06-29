@@ -59,6 +59,7 @@ def main():
     # Short training run: mini split, single epoch, a couple of batches, CSV
     # logger (no wandb), no test stage. A coarser voxel keeps preprocessing of
     # the large tiles fast while still exercising the full .laz pipeline.
+    max_epochs = os.environ.get("VERIFY_MAX_EPOCHS", "1")
     overrides = [
         "experiment=semantic/vox025toy_laz_dataset",
         "datamodule.mini=True",
@@ -66,7 +67,7 @@ def main():
         "datamodule.xy_tiling=2",
         "logger=csv",
         "trainer=gpu",
-        "trainer.max_epochs=1",
+        f"trainer.max_epochs={max_epochs}",
         "+trainer.limit_train_batches=2",
         "+trainer.limit_val_batches=2",
         "+trainer.num_sanity_val_steps=0",
