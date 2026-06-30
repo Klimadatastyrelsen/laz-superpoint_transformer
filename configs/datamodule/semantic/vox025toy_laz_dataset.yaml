@@ -16,7 +16,7 @@ xy_tiling: 3
 # preprocessing (a `.skip` sentinel is written instead of an `.h5`). This
 # avoids crashes and wasted compute on near-empty tiles (e.g. water). Set to
 # 0 to disable.
-min_points_per_subtile: 0
+min_points_per_subtile: 500
 
 # Features that will be computed, saved, loaded for points and segments
 

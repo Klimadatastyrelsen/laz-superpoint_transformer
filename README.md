@@ -344,8 +344,10 @@ files](#training-on-laz--las-files) above).
 ### Run inference on custom `.laz` files
 
 [`predict_many.py`](predict_many.py) classifies one or more `.laz` files using a
-trained checkpoint (`vox025toy_laz_dataset`). For Docker, mount host directories
-so checkpoints, input tiles, and outputs persist on your machine.
+trained checkpoint (`vox025toy_laz_dataset`). XY subtiles with fewer than
+`min_points_per_subtile` points (500 for the toy LAZ config) are skipped during
+inference; those points keep their input LAS classification. For Docker, mount
+host directories so checkpoints, input tiles, and outputs persist on your machine.
 
 **Prerequisites:** image `kds_spt_laz_pytorch:latest` (pull or build), a `.ckpt`
 file (download with `./scripts/download_model.sh` or use your own training

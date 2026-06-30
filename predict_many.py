@@ -316,6 +316,7 @@ def process_file(
     transforms_dict,
     model,
     xy_tiling,
+    min_points_per_subtile=0,
     get_accuracy=False,
     output_format="native",
 ):
@@ -344,7 +345,14 @@ def process_file(
             print(f"    Tile ({x + 1},{y + 1}): empty, skipping")
             continue
         data_tile = data_full.select(idx)[0]
-        print(f"    Tile ({x + 1},{y + 1}): {data_tile.num_points} points")
+        n_tile = data_tile.num_points
+        if min_points_per_subtile > 0 and n_tile < min_points_per_subtile:
+            print(
+                f"    Tile ({x + 1},{y + 1}): {n_tile} points — skipping "
+                f"({n_tile} < min_points_per_subtile={min_points_per_subtile})"
+            )
+            continue
+        print(f"    Tile ({x + 1},{y + 1}): {n_tile} points")
         tile_pred = run_tile_inference(data_tile, cfg, transforms_dict, model)
         pred_train[idx.cpu().numpy()] = tile_pred.numpy()
 
@@ -430,6 +438,15 @@ Examples:
         help="Append all stdout/stderr to this file (default: <output_folder>/predict_run.log)",
     )
     parser.add_argument(
+        "--min_points_per_subtile",
+        type=int,
+        default=None,
+        help=(
+            "Skip XY subtiles with fewer points than this (same as training "
+            "preprocessing). Default: datamodule config value."
+        ),
+    )
+    parser.add_argument(
         "--output_format",
         choices=OUTPUT_FORMATS,
         default="standard",
@@ -475,7 +492,15 @@ Examples:
             overrides=[args.config, "datamodule.load_full_res_idx=True"]
         )
         xy_tiling = cfg.datamodule.xy_tiling
+        if args.min_points_per_subtile is not None:
+            min_points_per_subtile = max(int(args.min_points_per_subtile), 0)
+        else:
+            min_points_per_subtile = max(
+                int(getattr(cfg.datamodule, "min_points_per_subtile", 0) or 0), 0
+            )
         print(f"  xy_tiling: {xy_tiling}")
+        if min_points_per_subtile > 0:
+            print(f"  min_points_per_subtile: {min_points_per_subtile}")
 
         transforms_dict = instantiate_datamodule_transforms(cfg.datamodule)
         model = hydra.utils.instantiate(cfg.model)
@@ -495,6 +520,7 @@ Examples:
                     transforms_dict,
                     model,
                     xy_tiling,
+                    min_points_per_subtile=min_points_per_subtile,
                     get_accuracy=args.get_accuracy,
                     output_format=args.output_format,
                 )
