@@ -27,8 +27,8 @@ if _project_root not in sys.path:
 from src.datasets.toy_laz_dataset import read_toy_laz_dataset_tile
 from src.datasets.toy_laz_dataset_config import (
     CLASS_NAMES,
-    ID2TRAINID,
     TOY_DATASET_NUM_CLASSES,
+    TRAINID2LAS,
 )
 from src.metrics.semantic import ConfusionMatrix
 from src.transforms import NAGRemoveKeys, SampleXYTiling, instantiate_datamodule_transforms
@@ -80,16 +80,7 @@ def setup_run_logging(run_log_path):
     return log_file
 
 
-def build_trainid2id(id2trainid, num_classes):
-    """Inverse map: training id -> representative LAS classification code."""
-    trainid2id = np.zeros(num_classes, dtype=np.uint8)
-    for las_id, train_id in enumerate(id2trainid):
-        if 0 <= train_id < num_classes:
-            trainid2id[train_id] = las_id
-    return trainid2id
-
-
-TRAINID2ID = build_trainid2id(ID2TRAINID, TOY_DATASET_NUM_CLASSES)
+TRAINID2ID = TRAINID2LAS
 
 
 def get_input_files(input_path):

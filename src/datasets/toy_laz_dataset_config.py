@@ -69,6 +69,12 @@ ID2TRAINID[17] = 8   # Bridge deck
 ID2TRAINID[18] = 9   # Highnoise
 ID2TRAINID[172] = 10  #Vehicle
 
+# Canonical ASPRS LAS codes when writing predictions (train id -> LAS class).
+# Must match the explicit ID2TRAINID assignments above. Do not invert
+# ID2TRAINID by enumeration: unmapped LAS codes also map to train id 0 and
+# the last index would wrongly become Ground (e.g. 171 instead of 2).
+TRAINID2LAS = np.asarray([2, 3, 4, 5, 6, 7, 9, 14, 17, 18, 172], dtype=np.uint8)
+
 
 CLASS_NAMES = [
     'Ground',
