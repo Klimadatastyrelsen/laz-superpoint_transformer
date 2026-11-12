@@ -255,8 +255,8 @@ Replace `rasmuspjohansson` with your Docker Hub username when publishing a fork.
 ### Download pretrained model (Hugging Face)
 
 The best `vox025toy_laz_dataset` checkpoint is published on Hugging Face at
-[`rasmuspjohansson/KDS_spt_laz`](https://huggingface.co/rasmuspjohansson/KDS_spt_laz).
-Download it into `checkpoints/` (no token required for the public repo):
+[`Danish-Agency-for-Cimate-Data/KDS_spt_laz`](https://huggingface.co/Danish-Agency-for-Cimate-Data/KDS_spt_laz).
+The KDS models and datasets on Hugging Face are private. They are available for non-commercial use; email rajoh@kds.dk for access. Download needs a token (`hf auth login`):
 
 ```bash
 ./scripts/download_model.sh
@@ -293,11 +293,11 @@ CKPT_PATH=/path/to/epoch_909.ckpt ./scripts/upload_model.sh
 **Manual equivalent:**
 
 ```bash
-hf upload rasmuspjohansson/KDS_spt_laz /path/to/epoch_909.ckpt vox025toy_laz_best.ckpt --repo-type model
-hf upload rasmuspjohansson/KDS_spt_laz scripts/KDS_spt_model_README.md README.md --repo-type model
+hf upload Danish-Agency-for-Cimate-Data/KDS_spt_laz /path/to/epoch_909.ckpt vox025toy_laz_best.ckpt --repo-type model
+hf upload Danish-Agency-for-Cimate-Data/KDS_spt_laz scripts/KDS_spt_model_README.md README.md --repo-type model
 ```
 
-Replace `rasmuspjohansson` with your Hugging Face username when publishing a fork.
+A fork publishes under its own Hugging Face namespace instead of `Danish-Agency-for-Cimate-Data`.
 
 ### Run `.laz` training with local data and outputs
 
@@ -752,8 +752,9 @@ This fork adds first-class support for airborne LiDAR point clouds stored as
 at mapping agencies working with national-scale ALS data. A small ready-to-use
 toy dataset is provided to get started.
 
-**1. Get the toy dataset.** The tiles live in the public HuggingFace dataset
-[`rasmuspjohansson/KDS_laz_dataset`](https://huggingface.co/datasets/rasmuspjohansson/KDS_laz_dataset).
+**1. Get the toy dataset.** The tiles live in the private HuggingFace dataset
+[`Danish-Agency-for-Cimate-Data/KDS_laz_dataset`](https://huggingface.co/datasets/Danish-Agency-for-Cimate-Data/KDS_laz_dataset).
+The KDS models and datasets on Hugging Face are private. They are available for non-commercial use; email rajoh@kds.dk for access.
 Download the splits expected by `toy_laz_dataset` with:
 
 ```bash
@@ -776,7 +777,7 @@ To republish tiles to HuggingFace, run `./scripts/upload_toy_laz_dataset.sh`
 
 **1b. Get the pretrained model (optional).** Skip training and download the
 published best checkpoint from
-[`rasmuspjohansson/KDS_spt_laz`](https://huggingface.co/rasmuspjohansson/KDS_spt_laz):
+[`Danish-Agency-for-Cimate-Data/KDS_spt_laz`](https://huggingface.co/Danish-Agency-for-Cimate-Data/KDS_spt_laz):
 
 ```bash
 ./scripts/download_model.sh

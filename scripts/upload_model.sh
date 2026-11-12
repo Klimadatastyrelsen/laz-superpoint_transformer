@@ -1,13 +1,13 @@
 #!/usr/bin/env bash
 # Upload the vox025toy_laz SPT checkpoint to the HuggingFace model repo
-# rasmuspjohansson/KDS_spt_laz as vox025toy_laz_best.ckpt.
+# Danish-Agency-for-Cimate-Data/KDS_spt_laz as vox025toy_laz_best.ckpt.
 # Layout matches scripts/download_model.sh.
 
 set -euo pipefail
 
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 ORCH_ROOT="$(cd "${HERE}/../.." && pwd)"
-REPO_ID="rasmuspjohansson/KDS_spt_laz"
+REPO_ID="Danish-Agency-for-Cimate-Data/KDS_spt_laz"
 MODEL_FILE="vox025toy_laz_best.ckpt"
 README_TEMPLATE="${HERE}/scripts/KDS_spt_model_README.md"
 CKPT_PATH="${CKPT_PATH:-/mnt/T/mnt/logs_and_models/pointcloud/vox025toy_laz_dataset/runs/2026-06-16_11-14-06/checkpoints/epoch_909.ckpt}"

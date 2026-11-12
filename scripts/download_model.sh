@@ -1,11 +1,12 @@
 #!/usr/bin/env bash
-# Download the pretrained vox025toy_laz SPT checkpoint from the public
-# HuggingFace model repo rasmuspjohansson/KDS_spt_laz into checkpoints/.
+# Download the pretrained vox025toy_laz SPT checkpoint from the private
+# HuggingFace model repo Danish-Agency-for-Cimate-Data/KDS_spt_laz into checkpoints/.
+# Needs a token: hf auth login. Non-commercial access: rajoh@kds.dk.
 
 set -euo pipefail
 
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-REPO_ID="rasmuspjohansson/KDS_spt_laz"
+REPO_ID="Danish-Agency-for-Cimate-Data/KDS_spt_laz"
 MODEL_FILE="vox025toy_laz_best.ckpt"
 DEST_DIR="${SPT_MODEL_DIR:-${HERE}/checkpoints}"
 DEST="${DEST_DIR}/${MODEL_FILE}"
@@ -20,7 +21,11 @@ if [[ -s "${DEST}" ]]; then
 fi
 
 echo "[download_model] downloading ${MODEL_FILE} from ${REPO_ID}"
-curl -fL --retry 3 -o "${DEST}" "${BASE_URL}/${MODEL_FILE}"
+auth=()
+if [[ -n "${HF_TOKEN:-}" ]]; then
+  auth=(-H "Authorization: Bearer ${HF_TOKEN}")
+fi
+curl -fL --retry 3 "${auth[@]}" -o "${DEST}" "${BASE_URL}/${MODEL_FILE}"
 
 echo "[download_model] done. Checkpoint: ${DEST}"
 echo "[download_model] use with: --ckpt_path ${DEST}"

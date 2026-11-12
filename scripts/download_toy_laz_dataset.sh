@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
-# Download the toy .laz dataset tiles from the public HuggingFace dataset
-# rasmuspjohansson/KDS_laz_dataset into data/toy_laz_dataset/raw/.
+# Download the toy .laz dataset tiles from the private HuggingFace dataset
+# Danish-Agency-for-Cimate-Data/KDS_laz_dataset into data/toy_laz_dataset/raw/.
+# Needs a token: hf auth login. Non-commercial access: rajoh@kds.dk.
 # These tiles match the splits declared in
 # src/datasets/toy_laz_dataset_config.py.
 
@@ -8,7 +9,7 @@ set -euo pipefail
 
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 DATA_DIR="${TOY_LAZ_DATA_DIR:-${HERE}/data/toy_laz_dataset/raw}"
-BASE_URL="https://huggingface.co/datasets/rasmuspjohansson/KDS_laz_dataset/resolve/main"
+BASE_URL="https://huggingface.co/datasets/Danish-Agency-for-Cimate-Data/KDS_laz_dataset/resolve/main"
 
 # split/filename pairs on disk (dest relative to DATA_DIR).
 TILES=(
@@ -22,6 +23,10 @@ TILES=(
 )
 
 mkdir -p "${DATA_DIR}/train" "${DATA_DIR}/test"
+auth=()
+if [[ -n "${HF_TOKEN:-}" ]]; then
+  auth=(-H "Authorization: Bearer ${HF_TOKEN}")
+fi
 
 for tile in "${TILES[@]}"; do
   dest="${DATA_DIR}/${tile}"
@@ -31,7 +36,7 @@ for tile in "${TILES[@]}"; do
   fi
   echo "[download_toy_laz_dataset] downloading ${tile}"
   mkdir -p "$(dirname "${dest}")"
-  curl -fL --retry 3 -o "${dest}" "${BASE_URL}/${tile}"
+  curl -fL --retry 3 "${auth[@]}" -o "${dest}" "${BASE_URL}/${tile}"
 done
 
 echo "[download_toy_laz_dataset] done. Files under ${DATA_DIR}"

@@ -34,7 +34,8 @@ the toy LAZ dataset (`vox025toy_laz_dataset`) from
 ## Companion dataset
 
 Training tiles are in the HuggingFace dataset
-[`rasmuspjohansson/KDS_laz_dataset`](https://huggingface.co/datasets/rasmuspjohansson/KDS_laz_dataset).
+[`Danish-Agency-for-Cimate-Data/KDS_laz_dataset`](https://huggingface.co/datasets/Danish-Agency-for-Cimate-Data/KDS_laz_dataset).
+The KDS models and datasets on Hugging Face are private. They are available for non-commercial use; email rajoh@kds.dk for access.
 Download with `./scripts/download_toy_laz_dataset.sh` from the project repo.
 
 ## Download

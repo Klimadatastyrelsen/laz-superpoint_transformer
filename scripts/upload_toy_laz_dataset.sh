@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Upload the toy .laz dataset tiles to the HuggingFace dataset
-# rasmuspjohansson/KDS_laz_dataset from data/toy_laz_dataset/raw/.
+# Danish-Agency-for-Cimate-Data/KDS_laz_dataset from data/toy_laz_dataset/raw/.
 # Layout matches src/datasets/toy_laz_dataset_config.py and
 # scripts/download_toy_laz_dataset.sh.
 
@@ -9,7 +9,7 @@ set -euo pipefail
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 ORCH_ROOT="$(cd "${HERE}/../.." && pwd)"
 DATA_DIR="${TOY_LAZ_DATA_DIR:-${HERE}/data/toy_laz_dataset/raw}"
-REPO_ID="rasmuspjohansson/KDS_laz_dataset"
+REPO_ID="Danish-Agency-for-Cimate-Data/KDS_laz_dataset"
 README_TEMPLATE="${HERE}/scripts/KDS_laz_dataset_README.md"
 
 TILES=(

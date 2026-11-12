@@ -16,6 +16,8 @@ size_categories:
 
 # KDS toy LAZ dataset
 
+The KDS models and datasets on Hugging Face are private. They are available for non-commercial use; email rajoh@kds.dk for access.
+
 Small airborne LiDAR (ALS) tile set in `.laz` format for the `toy_laz_dataset`
 in [laz-superpoint_transformer](https://github.com/Klimadatastyrelsen/laz-superpoint_transformer).
 
