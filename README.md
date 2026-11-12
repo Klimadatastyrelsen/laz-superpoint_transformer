@@ -256,9 +256,10 @@ Replace `rasmuspjohansson` with your Docker Hub username when publishing a fork.
 
 The best `vox025toy_laz_dataset` checkpoint is published on Hugging Face at
 [`Danish-Agency-for-Cimate-Data/KDS_spt_laz`](https://huggingface.co/Danish-Agency-for-Cimate-Data/KDS_spt_laz).
-The KDS models and datasets on Hugging Face are private. They are available for non-commercial use; email rajoh@kds.dk for access. Download needs a token (`hf auth login`):
+The KDS models and datasets on Hugging Face are private. They are available for non-commercial use; email rajoh@kds.dk for access. Log in to your Hugging Face account before running the download script. Without a login the script stops and downloads nothing.
 
 ```bash
+hf auth login
 ./scripts/download_model.sh
 # → checkpoints/vox025toy_laz_best.ckpt
 ```
@@ -306,7 +307,7 @@ them into the container at the same paths the project expects (`data/` and
 ```bash
 mkdir -p data logs
 
-# Download the toy .laz tiles on the host (or mount your own dataset tree)
+# Log in first (hf auth login). Then download the toy .laz tiles on the host.
 ./scripts/download_toy_laz_dataset.sh
 
 docker run --gpus all --rm -it \
@@ -361,7 +362,8 @@ checkpoint), and a folder of `.laz` files on the host.
 **Recommended: wrapper script** (handles mounts, interactive session, logging):
 
 ```bash
-./scripts/download_model.sh   # if you have not trained locally
+hf auth login                  # required before the download
+./scripts/download_model.sh      # if you have not trained locally
 
 ./scripts/run_predict_docker.sh \
   --ckpt checkpoints/vox025toy_laz_best.ckpt \
@@ -441,6 +443,7 @@ cd spt_verification
 # 2. Pull image (or build locally) and download dataset from HuggingFace
 ./scripts/docker_pull.sh
 mkdir -p data logs
+hf auth login                         # required before the download
 ./scripts/download_toy_laz_dataset.sh   # 7 tiles: 5 train + 2 test
 
 # 3. Optional smoke test (~5 min)
@@ -752,10 +755,10 @@ toy dataset is provided to get started.
 
 **1. Get the toy dataset.** The tiles live in the private HuggingFace dataset
 [`Danish-Agency-for-Cimate-Data/KDS_laz_dataset`](https://huggingface.co/datasets/Danish-Agency-for-Cimate-Data/KDS_laz_dataset).
-The KDS models and datasets on Hugging Face are private. They are available for non-commercial use; email rajoh@kds.dk for access.
-Download the splits expected by `toy_laz_dataset` with:
+The KDS models and datasets on Hugging Face are private. They are available for non-commercial use; email rajoh@kds.dk for access. Log in to your Hugging Face account before running the download script. Without a login the script stops and downloads nothing.
 
 ```bash
+hf auth login
 ./scripts/download_toy_laz_dataset.sh
 ```
 
