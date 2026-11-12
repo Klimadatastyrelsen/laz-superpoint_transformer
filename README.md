@@ -280,9 +280,7 @@ python predict_many.py \
 ### Publish model to Hugging Face
 
 Maintainers: after training a new best checkpoint, upload it to Hugging Face.
-Requires `pip install huggingface_hub` and a write token in `HF_TOKEN`,
-`HF_TOKEN_FILE`, `hftoken_write.txt` (repo root), or `my_huggingface_token.txt`
-(at the orchestrator / sibling-repo parent directory).
+Requires `pip install huggingface_hub` and `hf auth login` (or `HF_TOKEN`).
 
 **Script** (uploads checkpoint as `vox025toy_laz_best.ckpt` plus model card):
 
@@ -773,7 +771,7 @@ water regions (`6143_589`, `6172_728`, `6173_728`) are included now that
 preprocessing handles sparse/degenerate subtiles robustly.
 
 To republish tiles to HuggingFace, run `./scripts/upload_toy_laz_dataset.sh`
-(requires write access and a token in `HF_TOKEN` or `my_huggingface_token.txt`).
+(requires `hf auth login`, or `HF_TOKEN`, and write access).
 
 **1b. Get the pretrained model (optional).** Skip training and download the
 published best checkpoint from

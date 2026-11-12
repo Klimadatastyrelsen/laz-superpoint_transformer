@@ -36,20 +36,22 @@ resolve_hf_token() {
       token_file="${HERE}/hftoken_write.txt"
     elif [[ -f "${ORCH_ROOT}/my_huggingface_token.txt" ]]; then
       token_file="${ORCH_ROOT}/my_huggingface_token.txt"
-    else
-      token_file="${ORCH_ROOT}/my_huggingface_token.txt"
     fi
   fi
-  if [[ ! -f "${token_file}" ]]; then
-    echo "[upload_model] No HF_TOKEN and token file missing: ${token_file}" >&2
-    return 1
+  if [[ -n "${token_file}" && -f "${token_file}" ]]; then
+    HF_TOKEN="$(tr -d '[:space:]' < "${token_file}")"
+    if [[ -z "${HF_TOKEN}" ]]; then
+      echo "[upload_model] Token file is empty: ${token_file}" >&2
+      return 1
+    fi
+    export HF_TOKEN
+    return 0
   fi
-  HF_TOKEN="$(tr -d '[:space:]' < "${token_file}")"
-  if [[ -z "${HF_TOKEN}" ]]; then
-    echo "[upload_model] Token file is empty: ${token_file}" >&2
-    return 1
+  if hf auth whoami >/dev/null 2>&1; then
+    return 0
   fi
-  export HF_TOKEN
+  echo "[upload_model] hf auth login is required (or set HF_TOKEN)." >&2
+  return 1
 }
 
 upload_file() {
@@ -67,10 +69,7 @@ upload_file() {
 }
 
 HF_CLI="$(resolve_hf_cli)"
-
-if [[ "${DRY_RUN:-0}" != "1" ]]; then
-  resolve_hf_token
-fi
+resolve_hf_token
 
 if [[ ! -f "${README_TEMPLATE}" ]]; then
   echo "[upload_model] README template missing: ${README_TEMPLATE}" >&2

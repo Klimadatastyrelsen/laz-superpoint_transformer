@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Download the toy .laz dataset tiles from the private HuggingFace dataset
 # Danish-Agency-for-Cimate-Data/KDS_laz_dataset into data/toy_laz_dataset/raw/.
-# Needs a token: hf auth login. Non-commercial access: rajoh@kds.dk.
+# Needs `hf auth login` (or HF_TOKEN). Non-commercial access: rajoh@kds.dk.
 # These tiles match the splits declared in
 # src/datasets/toy_laz_dataset_config.py.
 
@@ -9,9 +9,8 @@ set -euo pipefail
 
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 DATA_DIR="${TOY_LAZ_DATA_DIR:-${HERE}/data/toy_laz_dataset/raw}"
-BASE_URL="https://huggingface.co/datasets/Danish-Agency-for-Cimate-Data/KDS_laz_dataset/resolve/main"
+REPO_ID="Danish-Agency-for-Cimate-Data/KDS_laz_dataset"
 
-# split/filename pairs on disk (dest relative to DATA_DIR).
 TILES=(
   "train/1km_6170_728.laz"
   "train/1km_6171_728.laz"
@@ -22,21 +21,20 @@ TILES=(
   "test/1km_6143_590.laz"
 )
 
-mkdir -p "${DATA_DIR}/train" "${DATA_DIR}/test"
-auth=()
-if [[ -n "${HF_TOKEN:-}" ]]; then
-  auth=(-H "Authorization: Bearer ${HF_TOKEN}")
+if ! command -v hf >/dev/null 2>&1; then
+  echo "[download_toy_laz_dataset] hf not found. Install with: pip install huggingface_hub" >&2
+  exit 1
+fi
+if ! hf auth whoami >/dev/null 2>&1; then
+  echo "[download_toy_laz_dataset] hf auth login is required (or set HF_TOKEN)." >&2
+  exit 1
 fi
 
-for tile in "${TILES[@]}"; do
-  dest="${DATA_DIR}/${tile}"
-  if [[ -s "${dest}" ]]; then
-    echo "[download_toy_laz_dataset] already present: ${tile}"
-    continue
-  fi
-  echo "[download_toy_laz_dataset] downloading ${tile}"
-  mkdir -p "$(dirname "${dest}")"
-  curl -fL --retry 3 "${auth[@]}" -o "${dest}" "${BASE_URL}/${tile}"
-done
+mkdir -p "${DATA_DIR}/train" "${DATA_DIR}/test"
+echo "[download_toy_laz_dataset] downloading ${#TILES[@]} tiles from ${REPO_ID}"
+hf download "${REPO_ID}" \
+  --repo-type dataset \
+  --local-dir "${DATA_DIR}" \
+  "${TILES[@]}"
 
 echo "[download_toy_laz_dataset] done. Files under ${DATA_DIR}"

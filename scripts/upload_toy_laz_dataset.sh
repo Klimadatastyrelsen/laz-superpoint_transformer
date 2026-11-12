@@ -44,17 +44,28 @@ resolve_hf_token() {
   if [[ -n "${HF_TOKEN:-}" ]]; then
     return 0
   fi
-  local token_file="${HF_TOKEN_FILE:-${ORCH_ROOT}/my_huggingface_token.txt}"
-  if [[ ! -f "${token_file}" ]]; then
-    echo "[upload_toy_laz_dataset] No HF_TOKEN and token file missing: ${token_file}" >&2
-    return 1
+  local token_file="${HF_TOKEN_FILE:-}"
+  if [[ -z "${token_file}" ]]; then
+    if [[ -f "${HERE}/hftoken_write.txt" ]]; then
+      token_file="${HERE}/hftoken_write.txt"
+    elif [[ -f "${ORCH_ROOT}/my_huggingface_token.txt" ]]; then
+      token_file="${ORCH_ROOT}/my_huggingface_token.txt"
+    fi
   fi
-  HF_TOKEN="$(tr -d '[:space:]' < "${token_file}")"
-  if [[ -z "${HF_TOKEN}" ]]; then
-    echo "[upload_toy_laz_dataset] Token file is empty: ${token_file}" >&2
-    return 1
+  if [[ -n "${token_file}" && -f "${token_file}" ]]; then
+    HF_TOKEN="$(tr -d '[:space:]' < "${token_file}")"
+    if [[ -z "${HF_TOKEN}" ]]; then
+      echo "[upload_toy_laz_dataset] Token file is empty: ${token_file}" >&2
+      return 1
+    fi
+    export HF_TOKEN
+    return 0
   fi
-  export HF_TOKEN
+  if hf auth whoami >/dev/null 2>&1; then
+    return 0
+  fi
+  echo "[upload_toy_laz_dataset] hf auth login is required (or set HF_TOKEN)." >&2
+  return 1
 }
 
 delete_stale_hf_path() {
