@@ -1,0 +1,30 @@
+# @package _global_
+
+# to execute this experiment run:
+# ./scripts/train_kds_laz_dataset_v1.sh
+# python src/train.py experiment=semantic/vox025kds_laz_dataset_v1 logger=csv
+
+defaults:
+  - override /datamodule: semantic/vox025kds_laz_dataset_v1.yaml
+  - override /model: semantic/spt-2.yaml
+  - override /trainer: gpu.yaml
+
+# all parameters below will be merged with parameters from default
+# configurations set above; this only overwrites the specified parameters
+
+task_name: "vox025kds_laz_dataset_v1"
+
+trainer:
+  # ~414 steps/epoch (46 tiles x 3x3 subtiles). 200 epochs is a bit more
+  # optimiser steps than the 1400-epoch toy run on 4 tiles.
+  max_epochs: 200
+
+model:
+  optimizer:
+    lr: 0.01
+    weight_decay: 1e-4
+
+logger:
+  wandb:
+    project: "spt_kds_laz_dataset_v1"
+    name: "SPT-64"

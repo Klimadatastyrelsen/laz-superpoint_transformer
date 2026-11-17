@@ -38,6 +38,19 @@ def scatter_mean_weighted(x, idx, w, dim_size=None):
     return mean_segment
 
 
+def _eigh_in_chunks(cov, chunk_size=8192):
+    """Symmetric eigendecomposition in batches small enough for cuSOLVER."""
+    if cov.shape[0] <= chunk_size:
+        return torch.linalg.eigh(cov, UPLO='U')
+    eigenval = []
+    eigenvec = []
+    for start in range(0, cov.shape[0], chunk_size):
+        values, vectors = torch.linalg.eigh(cov[start:start + chunk_size], UPLO='U')
+        eigenval.append(values)
+        eigenvec.append(vectors)
+    return torch.cat(eigenval, dim=0), torch.cat(eigenvec, dim=0)
+
+
 def scatter_pca(x, idx, on_cpu=False, algorithm='eigh'):
     """Scatter implementation for PCA.
 
@@ -85,7 +98,11 @@ def scatter_pca(x, idx, on_cpu=False, algorithm='eigh'):
         eigenvec = eigenvec.to(device)
 
     elif algorithm == 'eigh':
-        eigenval, eigenvec = torch.linalg.eigh(cov, UPLO='U')
+        # cuSOLVER's batched syev rejects large batches on some GPUs
+        # (Blackwell, CUDA 12.8): bufferSize fails above ~10k matrices.
+        # Non-finite covariances (empty groups) fail the same call.
+        cov = torch.nan_to_num(cov, nan=0.0, posinf=0.0, neginf=0.0)
+        eigenval, eigenvec = _eigh_in_chunks(cov, chunk_size=8192)
 
     elif algorithm == 'eig':
         cov[:, ij[:, 1], ij[:, 0]] = upper_triangle

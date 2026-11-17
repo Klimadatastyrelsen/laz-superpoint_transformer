@@ -6,3 +6,4 @@ from .s3dis import *
 from .s3dis_room import *
 from .scannet import *
 from .toy_laz_dataset import *
+from .kds_laz_dataset_v1 import *

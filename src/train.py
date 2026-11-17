@@ -41,6 +41,18 @@ from typing import List, Optional, Tuple
 import hydra
 import torch
 import torch_geometric
+
+# PyTorch 2.6+ defaults torch.load(weights_only=True). Lightning checkpoints
+# from this repo pickle getattr, so the end-of-training test load fails.
+_torch_load = torch.load
+
+
+def _torch_load_checkpoint(*args, **kwargs):
+    kwargs["weights_only"] = False
+    return _torch_load(*args, **kwargs)
+
+
+torch.load = _torch_load_checkpoint
 import pytorch_lightning as pl
 from omegaconf import OmegaConf, DictConfig
 from pytorch_lightning import Callback, LightningDataModule, LightningModule, Trainer

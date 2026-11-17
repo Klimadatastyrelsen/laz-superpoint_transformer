@@ -40,6 +40,17 @@ from typing import List, Tuple
 import hydra
 import torch
 import torch_geometric
+
+# Same weights_only override as train.py. These checkpoints are written here.
+_torch_load = torch.load
+
+
+def _torch_load_checkpoint(*args, **kwargs):
+    kwargs["weights_only"] = False
+    return _torch_load(*args, **kwargs)
+
+
+torch.load = _torch_load_checkpoint
 from omegaconf import OmegaConf, DictConfig
 from pytorch_lightning import LightningDataModule, LightningModule, Trainer
 from pytorch_lightning.loggers import Logger

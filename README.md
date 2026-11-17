@@ -824,6 +824,59 @@ For full inference on trained checkpoints (including custom `.laz` folders via
 Docker), see [Run inference on custom `.laz` files](#run-inference-on-custom-laz-files)
 under the Docker section.
 
+#### Training the SPT model on KDS_laz_dataset_v1
+
+KDS_laz_dataset_v1 (19 LAS classes, vegetation in codes 3/4/5) trains an
+SPT-2 model at 0.25 m voxels, the same setup as the toy dataset. The
+published Docker image is PyTorch 2.2 + CUDA 11.8 and does not run on a
+Blackwell GPU (compute 12.0). Use the conda env instead.
+
+From the repository root:
+
+```bash
+./scripts/install_spt_blackwell.sh          # once; creates conda env `spt`
+./scripts/prepare_kds_laz_dataset_v1.sh     # checks tiles; also run by the trainer
+./scripts/train_kds_laz_dataset_v1.sh smoke # 1 epoch, 2 batches, mini split
+./scripts/train_kds_laz_dataset_v1.sh       # 200 epochs, CSV logger
+```
+
+Resume a stopped run from its last checkpoint:
+
+```bash
+./scripts/train_kds_laz_dataset_v1.sh resume \
+  logs/vox025kds_laz_dataset_v1/runs/<timestamp>/checkpoints/last.ckpt
+```
+
+Defaults (override with environment variables):
+
+| Variable | Default |
+|----------|---------|
+| `SPT_ENV` | `spt` |
+| `CONDA_DIR` | `~/miniforge3` |
+| `KDS_LAZ_SRC` | `/mnt/T/mnt/trainingdata/lidar/KDS_laz_dataset_v1` |
+| `KDS_LAZ_DATA_DIR` | `/mnt/T/mnt/trainingdata/lidar` |
+
+`prepare_kds_laz_dataset_v1.sh` reads the split from
+[`src/datasets/kds_laz_dataset_v1_config.py`](src/datasets/kds_laz_dataset_v1_config.py)
+and checks that each tile exists in `KDS_LAZ_SRC`. The `.laz` files are
+read from that folder in place. **Val** is `1km_6148_682`. **Test** is
+`1km_6177_722`. The other 46 tiles are train. The toy val/test tiles are
+not in this capture. Preprocessed `.h5` files go to
+`${KDS_LAZ_DATA_DIR}/KDS_laz_dataset_v1/processed/`.
+
+The trainer sets `num_workers=0`. Several DataLoader workers reading the
+preprocessed `.h5` files over CIFS stall, so the load runs in the main
+process.
+
+Checkpoints and the CSV log land under
+`logs/vox025kds_laz_dataset_v1/runs/<timestamp>/checkpoints/` (`last.ckpt` and the
+best `epoch_*.ckpt`). The full console log is also appended to
+`logs/kds_laz_dataset_v1_train.log`. After the 200 epochs the trainer evaluates
+the test tile. Activate the env by hand with `conda activate spt` if you
+want to call `python src/train.py experiment=semantic/vox025kds_laz_dataset_v1 logger=csv`
+yourself. `install_spt_blackwell.sh` is safe to re-run: it reinstalls the
+pinned torch `2.11.0+cu128` stack and rebuilds FRNN for compute 12.0.
+
 #### EZ-SP
 
 Our EZ-SP method involves a two-stage training. 
